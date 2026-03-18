@@ -91,7 +91,7 @@ class CityscapesLables:
         return class_count
     
 
-    def get_weights(self, dataloader: datasets.Cityscapes, method='enet', print_histogram=False, save_path=None, device='cpu'):
+    def get_weights(self, dataloader: datasets.Cityscapes, method: str='enet', print_histogram: bool=False, save_path: str=None, device: str='cpu') -> torch.Tensor:
         '''
         Cria pesos para as classes a partir do histograma de frequencia das classes no dataset
         Eh esperado que o dataset ja esteja com as mascaras originais convertidas para 20 Classes (19 + ignore) usando o IdToTrainIdTransform
@@ -123,6 +123,8 @@ class CityscapesLables:
             class_dict = {self.id_names[i]: class_weights[i].item() for i in range(self.num_classes)}
 
             # Salva o json em um arquivo
+            save_path = Path(save_path)
+            save_path.mkdir(parents=True, exist_ok=True)
             weights_file = save_path / Path(f"class_weights_{method}.json")
             with open(weights_file, 'w') as f:
                 json.dump(class_dict, f, indent=4)

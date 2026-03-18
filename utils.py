@@ -8,8 +8,6 @@ from torchmetrics.classification import MulticlassJaccardIndex
 
 import custom_cityscapes as ccs
 
-from train_model import NUM_CLASSES
-
 def plot_leaning_rate_evolution(learning_rates: list[float]) -> None:
     plt.figure(figsize=(5, 10))
     plt.plot(learning_rates)
@@ -123,10 +121,10 @@ def img_show(imgs: list[torch.Tensor], smnts1: list[torch.Tensor], smnts2: list[
 
         axes[i, 0].imshow(imgs[i].permute(1,2,0)) # permute para mudar a ordem dos canais e converter um tensor para imagem
         axes[i, 0].axis('off')
-        axes[i, 1].imshow(smnts1[i], cmap=cmap, vmin=0, vmax=NUM_CLASSES-1) # vmin e vmax para garantir que a segmentacao seja mostrada com as mesmas cores, independente da quantidade de classes presentes em cada segmentacao
+        axes[i, 1].imshow(smnts1[i], cmap=cmap, vmin=0, vmax=19) # vmin e vmax para garantir que a segmentacao seja mostrada com as mesmas cores, independente da quantidade de classes presentes em cada segmentacao
         axes[i, 1].axis('off')
         if smnts2 is not None:
-            axes[i, 2].imshow(smnts2[i], cmap=cmap, vmin=0, vmax=NUM_CLASSES-1)
+            axes[i, 2].imshow(smnts2[i], cmap=cmap, vmin=0, vmax=19)
             axes[i, 2].axis('off')
     plt.show()
 
@@ -185,37 +183,37 @@ def dataset_show(dataset, n:int = 5, predict_masks: bool=False, model: torch.nn.
              n=n,col_names=col_names, cmap=cmap)
 
 
-def load_results(name: str) -> dict | None:
+def load_results(path: str) -> dict | None:
 
-    MODEL_PATH = Path.cwd() / Path("saved_models")
-    RESULTS_NAME = name + "_results.pt"
-    RESULTS_SAVE_PATH = MODEL_PATH / RESULTS_NAME
-    if RESULTS_SAVE_PATH.is_file():
-        with open(RESULTS_SAVE_PATH, "rb") as f:
+    path = Path(path)
+    file_name = path.stem # Extrai o nome do arquivo a partir do caminho dado
+    if path.is_file():
+        print(f"Carregando resultados do modelo {file_name}")
+        with open(path, "rb") as f:
             results = torch.load(f, map_location='cpu')
 
         return results
     
     else:
-        print(f"Resultados do modelo {name} nao encontrados.")
+        print(f"Resultados do modelo {file_name} nao encontrados.")
         return None
 
 
-def load_state_dict(model: torch.nn.Module, name: str, load_reults: bool=False, device: torch.device='cpu') -> torch.nn.Module | tuple[torch.nn.Module, dict]:
+def load_state_dict(model: torch.nn.Module, path: str, results_path: str=None) -> torch.nn.Module | tuple[torch.nn.Module, dict]:
     
     # Carregando apenas os parametros (state_dict()), pois isso flexibiliza o modelo e evita erros de incompatibilidade com parametros e caminhos do modelo original
     # OBS: torch.load() carrega o modelo inteiro, nao apenas os parametros
-    MODEL_PATH = Path.cwd() / Path("saved_models")
-    MODEL_NAME = name + ".pth"
-    SAVED_MODEL_PATH = MODEL_PATH / MODEL_NAME
-    if SAVED_MODEL_PATH.is_file():
-        model.load_state_dict(torch.load(f=SAVED_MODEL_PATH))
+    path = Path(path)
+    model_name = path.stem # Extrai o nome do modelo a partir do caminho dado
+    if path.is_file():
+        print(f"Carregando modelo {model_name}")
+        model.load_state_dict(torch.load(f=path))
     else:
-        print(f"Modelo {name} nao encontrado.")
+        print(f"Modelo {model_name} nao encontrado.")
 
-    # Se load_results for True, entao o modelo e carregado e testado, e os resultados sao impressos, caso contrario, apenas o modelo e carregado e retornado
-    if load_reults:
-        model_results = load_results(name)
+    # Se load_results nao for nulo, entao o modelo e carregado e testado, e os resultados sao impressos, caso contrario, apenas o modelo e carregado e retornado
+    if results_path is not None:
+        model_results = load_results(results_path)
         return model, model_results
     
     else:

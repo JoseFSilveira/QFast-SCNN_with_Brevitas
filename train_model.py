@@ -4,9 +4,7 @@ from torch import optim
 from tqdm.auto import tqdm
 from pathlib import Path
 
-NUM_CLASSES = 20 # Numero de classes do dataset, incluindo a classe de ignorar (void)
-
-class TrainLinkNet:
+class TrainModel:
   
     def __init__(self, model: torch.nn.Module, loss_fn: callable, optim_fn: callable, metrics: dict,
                  val_to_monitor: str="loss",
@@ -15,11 +13,13 @@ class TrainLinkNet:
                  epochs: int = 5,
                  device: torch.device='cpu') -> None:
     
-        self.model = model.to(device)
+        self.model = model
         self.val_to_monitor = val_to_monitor
         self.epochs = epochs
         self.device = device
         self.max_lr = max_lr
+
+        self.num_classes = 19 # Numero de classes do dataset, sem contar a classe de ignorar (void)
 
         valid_scheduler_names = ["OneCycleLR", "ReduceLROnPlateau"]
         if scheduler_name in valid_scheduler_names:
@@ -55,10 +55,12 @@ class TrainLinkNet:
             self.results[f"train_{metric_name}"] = []
             self.results[f"val_{metric_name}"] = []
         
-        # Criando Pasta para salver Modelo
-        self.MODEL_PATH = Path.cwd() / Path("saved_models") # Armazenar modelos salvos numa pasta nova dentro da pasta do projeto
-        self.MODEL_PATH.mkdir(parents=True, exist_ok=True)
-    
+        # Criando Pasta para salver Modelo e resultados
+        self.model_path = "./model_weights/new_params/best_model.pth"
+        self.results_path = "./model_weights/new_params/best_model_results.pt"
+        Path(self.model_path).parent.mkdir(parents=True, exist_ok=True) # Cria a pasta para salvar o modelo, caso ela nao exista
+        Path(self.results_path).parent.mkdir(parents=True, exist_ok=True) # Cria a pasta para salvar os resultados, caso ela nao exista
+
 
     def get_scheduler(self, dataloader: torch.utils.data.DataLoader):
          # Define o scheduler de learning rate
@@ -87,8 +89,8 @@ class TrainLinkNet:
 
     def test_metric_output(self) -> list[type]:
         # Testa se as metricas retornam valores unicos ou tensores com mais de um valor, para ajudar na inicializacao do loop de treino
-        y_true = torch.randint(low=0, high=NUM_CLASSES, size=(10, 10)).to(self.device)
-        y_pred = torch.randint(low=0, high=NUM_CLASSES, size=(10, 10)).to(self.device)
+        y_true = torch.randint(low=0, high=self.num_classes, size=(10, 10)).to(self.device)
+        y_pred = torch.randint(low=0, high=self.num_classes, size=(10, 10)).to(self.device)
 
         metric_out_types = []
         for metric_fn in self.metric_fns:
@@ -107,39 +109,41 @@ class TrainLinkNet:
         return metric_out_types
 
 
-    def save_results(self, name: str, best_metric: int=0) -> None:
+    def save_results(self, path: str) -> None:
+
+        # Criando Caminho para Salvar os resultados
+        path = Path(path)
+        file_folder = path.parent
+        file_folder.mkdir(parents=True, exist_ok=True)
 
         # Salvar resultados
-        RESULTS_SAVE_PATH = self.MODEL_PATH / Path(f"{name}_results.pt")
-        with open(RESULTS_SAVE_PATH, "wb") as f:
+        with open(path, "wb") as f:
             torch.save(self.results, f)
 
 
-    def save_model(self, name: str ="best_model", save_results: bool=False, best_metric=None) -> None:
-
-        '''
-        best_metric sera considerado apenas se save_results for True
-        '''
+    def save_model(self, path: str, results_path: str=None) -> None:
 
         # Criando Caminho para Salvar Modelo
-        MODEL_SAVE_PATH = self.MODEL_PATH / Path(name + ".pth")
+        path = Path(path)
+        file_folder = path.parent
+        file_folder.mkdir(parents=True, exist_ok=True)
 
         # Salvando o modelo
-        torch.save(obj=self.model._origin_mod.state_dict(), f=MODEL_SAVE_PATH) # Salva o State Dict do modelo antes do torch.compile, para evitar problemas de compatibilidade
+        torch.save(obj=self.model._origin_mod.state_dict(), f=path) # Salva o State Dict do modelo antes do torch.compile, para evitar problemas de compatibilidade
 
         # Salvando os resultados do treino, caso necesssario
-        if save_results:
-            self.save_results(name, best_metric)
+        if results_path is not None:
+            self.save_results(results_path)
 
 
-    def load_best_metric(self, model_name="best_model") -> dict:
+    def load_best_metric(self, path: str) -> dict:
         
         key_string = f"val_{self.metric_to_monitor}" if self.metric_monitor_index is not None else "val_loss"
 
         # Carrega o melhor valor da metrica monitorada para metricas de validacao do melhor modelo
-        SAVED_METRIC_PATH = self.MODEL_PATH / Path(model_name + "_results.pt")
-        if SAVED_METRIC_PATH.is_file():
-            with open(SAVED_METRIC_PATH, "rb") as f:
+        path = Path(path)
+        if path.is_file():
+            with open(path, "rb") as f:
                 best_model_results = torch.load(f)
                 best_metric = best_model_results[key_string][-1] if len(best_model_results[key_string]) > 0 else 0
         else:
@@ -159,7 +163,7 @@ class TrainLinkNet:
             if metric_type == int:
                 metric_values.append(0)
             else:
-                metric_values.append(torch.zeros(NUM_CLASSES))
+                metric_values.append(torch.zeros(self.num_classes))
 
         for batch, (X, y) in enumerate(tqdm(dataloader)):
             X, y = X.to(self.device), y.to(self.device)
@@ -196,7 +200,7 @@ class TrainLinkNet:
             if metric_type == int:
                 metric_values.append(0)
             else:
-                metric_values.append(torch.zeros(NUM_CLASSES))
+                metric_values.append(torch.zeros(self.num_classes))
 
         with torch.inference_mode():
             for batch, (X, y) in enumerate(dataloader):
@@ -222,7 +226,7 @@ class TrainLinkNet:
                     val_dataloader: torch.utils.data.DataLoader) -> None:
 
         # Cria variaveis para salvar melhor iIoU e em qual epoch foi atingido
-        best_metric = self.load_best_metric() # Carrega o melhor iIoU registrado, caso exista, para comparar com os resultados do treino atual
+        best_metric = self.load_best_metric(path=self.results_path) # Carrega o melhor iIoU registrado, caso exista, para comparar com os resultados do treino atual
         best_epoch = 0
 
         # Variavel auxiliar para saber se o treino atual registrou um modelo melhor que o anteriormente salvo, caso ele exista.
@@ -271,13 +275,13 @@ class TrainLinkNet:
                     model_improved = True
                     best_metric = val_metrics[self.metric_monitor_index].item() # Atualiza o melhor valor da metrica monitorada, convertendo para um valor escalar usando .item()
                     best_epoch = epoch
-                    self.save_model(save_results=True, best_metric=best_metric) # Salva o modelo e os resultados do treino, caso a metrica seja a melhor registrada
+                    self.save_model(path=self.model_path, results_path=self.results_path) # Salva o modelo e os resultados do treino, caso a metrica seja a melhor registrada
 
         # Sinaliza fim do Treino
         if model_improved:
             print("Treino do modelo foi finalizado!\n"
                 f"O modelo com melhor {self.metric_to_monitor} foi registrado no Epoch {best_epoch+1}.\n"
-                f"Esse modelo foi salvo no caminho {self.MODEL_PATH}")
+                f"Esse modelo foi salvo no caminho {self.model_path}")
         else:
             print("Treino do modelo foi finalizado!\n"
                   "Nao foi registrado modelo com melhores resultados que o anteriromente salvo.")
