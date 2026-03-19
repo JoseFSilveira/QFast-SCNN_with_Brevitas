@@ -7,13 +7,15 @@ import matplotlib.pyplot as plt
 import json
 from pathlib import Path
 from tqdm.asyncio import tqdm
+from config import NUM_CLASSES, IGNORE_INDEX
 
 
 class CityscapesLables:
     def __init__(self):
 
         # Definindo o numero de classes treinaveis (19 classes + 1 classe de ignorar)
-        self.num_classes = 19
+        self.num_classes = NUM_CLASSES
+        self.ignore_index = IGNORE_INDEX
 
         # Criando listas dos nomes e das cores das classes treinaveis
         id_names = {}
@@ -22,14 +24,14 @@ class CityscapesLables:
         for c in datasets.Cityscapes.classes:
 
             # Adicionando valores ao dicionario de conversao de ids
-            lable_conversion[c.id] = c.train_id if c.train_id != -1 else 255 # A classe 'ignore' tem train_id -1, entao atribui o valor 255 para ela
+            lable_conversion[c.id] = c.train_id if c.train_id != -1 else self.ignore_index # A classe 'ignore' tem train_id -1, entao atribui o valor IGNORE_INDEX para ela
             # Adicionando valores as listas de nomes e cores
             if c.train_id != -1 and c.train_id != 255:
                 id_names[c.train_id] = c.name
                 color_list.append(c.color)
 
         # Variavel para dicionario de nomes
-        id_names.update({255: 'ignore'}) # Adiciona a classe 'ignore' com train_id 255
+        id_names.update({self.ignore_index: 'ignore'}) # Adiciona a classe 'ignore' com train_id 255
         self.id_names = id_names
 
         # Variavel para lista de cores
@@ -65,7 +67,7 @@ class CityscapesLables:
             mask = mask.to(device) # Aloca as mascaras do batch no dispositivo
             for c in range(self.num_classes+1):
                 # Conta o numero de pixels da classe c no batch e adiciona ao contador total. Para a classe 'ignore' (train_id 255), conta os pixels com valor 255
-                class_count[c] += (mask == c).sum() if c != 19 else (mask == 255).sum()
+                class_count[c] += (mask == c).sum() if c != self.num_classes else (mask == self.ignore_index).sum()
 
         # Cria o grafico se print_histogram for True ou save_path for fornecido
         if print_histogram or save_path is not None:

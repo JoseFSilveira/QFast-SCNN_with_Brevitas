@@ -3,6 +3,7 @@ import torch
 from torch import optim
 from tqdm.auto import tqdm
 from pathlib import Path
+from config import NUM_CLASSES
 
 class TrainModel:
   
@@ -19,7 +20,7 @@ class TrainModel:
         self.device = device
         self.max_lr = max_lr
 
-        self.num_classes = 19 # Numero de classes do dataset, sem contar a classe de ignorar (void)
+        self.num_classes = NUM_CLASSES
 
         valid_scheduler_names = ["OneCycleLR", "ReduceLROnPlateau"]
         if scheduler_name in valid_scheduler_names:
