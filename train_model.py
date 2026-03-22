@@ -137,6 +137,9 @@ class TrainModel:
         train_loss = 0
         metric_values = []
 
+        for metric_fn in self.metric_fns:
+            metric_fn.reset() # Reseta os estados internos de cada metrica, caso existam, para garantir que as metricas sejam calculadas corretamente para o epoch atual
+
         for batch, (X, y) in enumerate(tqdm(dataloader)):
             X, y = X.to(self.device), y.to(self.device)
             y_pred = self.model(X) # O modelo retorna uma tupla com a saida principal e a saida auxiliar
@@ -166,6 +169,9 @@ class TrainModel:
         self.model.eval()
         val_loss = 0
         metric_values = []
+
+        for metric_fn in self.metric_fns:
+            metric_fn.reset() # Reseta os estados internos de cada metrica, caso existam, para garantir que as metricas sejam calculadas corretamente para o epoch atual
 
         with torch.inference_mode():
             for batch, (X, y) in enumerate(dataloader):

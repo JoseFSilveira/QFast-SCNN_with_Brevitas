@@ -1,4 +1,10 @@
 import os
+import warnings
+
+
+# -- WARING CONFIGS --
+warnings.filterwarnings('once') # Exibe cada aviso apenas uma vez para evitar poluição do console com mensagens repetidas.
+
 
 # -- DEFINICAO DE VARIAVEIS DE AMBIENTE --
 os.environ['ROCR_VISIBLE_DEVICES'] = '0' # Define quais GPUs AMD estão visíveis para o PyTorch. Use '0' para a primeira GPU, '1' para a segunda, etc.
@@ -21,7 +27,7 @@ IM_WIDTH = 2048
 
 BATCH_SIZE = 12
 NUM_WORKERS = os.cpu_count() // 2
-EPOCHS = 10
+EPOCHS = 100
 LEARNING_RATE = 5e-5
 
 NUM_CLASSES = 19 # Numero de classes do dataset, excluindo a classe de ignorar (void)
