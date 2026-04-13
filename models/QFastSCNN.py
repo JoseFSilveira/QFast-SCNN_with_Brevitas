@@ -102,15 +102,21 @@ class LinearBottleneck(nn.Module):
         )
         
         # Added quantization for the skip connection
-        self.quant_sum = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
+        self.quant_unpack = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
+                                               bit_width=BIT_WIDTH,
+                                               return_quant_tensor=False)
+        
+        self.quant_out = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
                                            bit_width=BIT_WIDTH,
                                            return_quant_tensor=True)
 
     def forward(self, x):
         out = self.block(x)
-        out = self.quant_sum(out)
+        out = self.quant_out(out)
         if self.use_shortcut:
-            out = self.quant_sum(x + out)
+            x = self.quant_unpack(x)
+            out = self.quant_unpack(out)
+            out = self.quant_out(x + out)
         return out
 
 
@@ -211,19 +217,19 @@ class FeatureFusionModule(nn.Module):
             qnn.QuantConv2d(out_channels, out_channels, 1,
                             weight_bit_width=BIT_WIDTH,
                             weight_quant=Int8WeightPerTensorFloat,
-                            return_quant_tensor=True),
+                            return_quant_tensor=False),
             nn.BatchNorm2d(out_channels)
         )
         self.conv_higher_res = nn.Sequential(
             qnn.QuantConv2d(highter_in_channels, out_channels, 1,
                             weight_bit_width=BIT_WIDTH,
                             weight_quant=Int8WeightPerTensorFloat,
-                            return_quant_tensor=True),
+                            return_quant_tensor=False),
             nn.BatchNorm2d(out_channels)
         )
         self.relu = qnn.QuantReLU(inplace=True, bit_width=BIT_WIDTH, act_quant=Uint8ActPerTensorFloat, return_quant_tensor=True)
 
-        # Added quantization for the skip connection
+        # Added quantization for the skip connection     
         self.quant_sum = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
                                            bit_width=BIT_WIDTH,
                                            return_quant_tensor=True)

@@ -1,2 +1,2 @@
 --> Fusion method, new initial layer to convert the input from raw uint8 to QuantTensor from -1 to 1.
---> Before exporting the quantized model to Replace all BatchNorm2d Layers with qnn.BatchNorm2dToQuantScaleBias(), so that the layes can be compressed
+--> Before exporting the quantized model to Replace all BatchNorm2d Layers with qnn.BatchNorm2dToQuantScaleBias(), so that the layers can be compressed
