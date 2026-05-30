@@ -4,8 +4,11 @@ The following changes to make it compatible with quantization and translation to
 --> The input and activations are quantized to 8 bits using per-tensor quantization with a floating-point scale.
 --> The weights are quantized to 8 bits using per-tensor quantization with a floating-point scale.
 --> F.interpolate is replaced by qnn.QuantUpsample with 'nearest' mode.
+--> The pooling layers are quantized using qnn.TruncAdaptiveAvgPool2d. One for each pool size since the output size is a parameter in the quantized version.
+--> Upsample and pooling operations are quantized to avoid issues when translating the model to ONNX and then to FINN, which do not support non-quantized operations in the middle of the model.
 --> The last upsampling layer is removed to avoid a large upsampling factor with 'nearest' mode, which can comprimise severly the accuracy of the model.
   obs: The last upsampling layer can be done in external post-processing step, with the output of the model being passed to a CPU or small GPU.
+--> Added QAT wrapper to include the last upsampling layer that was removed from the model, to be used only during training and then removed for export to ONNX and FINN.
 '''
 
 import torch
@@ -14,8 +17,35 @@ import torch.nn.functional as F
 import brevitas.nn as qnn
 from brevitas.quant.scaled_int import Int8WeightPerTensorFloat, Uint8ActPerTensorFloat, Int8ActPerTensorFloat, Int8BiasPerTensorFloatInternalScaling
 from brevitas.quant_tensor import QuantTensor
+from brevitas.inject.enum import *
 
 from config import BIT_WIDTH
+
+class ParameterizedActQuant(Int8ActPerTensorFloat):
+    '''
+    Custom parameterized activation quantizer that restricts the scaling implementation type to be a parameter, which is necessary for the quantization-aware training and export to ONNX and FINN.
+    '''
+    scaling_impl_type = ScalingImplType.PARAMETER
+    max_val = 6.0
+    min_val = -6.0
+
+
+class QATwrapper(torch.nn.Module):
+    '''
+    Wrapper for the quantized model, with the layers of Fast-SCNN that were removed from the original to facilitate the export to FINN.
+    '''
+    def __init__(self, model: torch.nn.Module):
+        super().__init__()
+        self.model = model
+
+    def output_upsample(self, output: torch.Tensor, size: list[int]) -> torch.Tensor:
+        return F.interpolate(output, size=size, mode='bilinear', align_corners=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        size = list(x.shape[2:]) # Salva o tamanho original da entrada para usar no upsample da saida
+        x = self.model(x)
+        x = self.output_upsample(x, size) # Redimenciona a saida para o mesmo tamanho da entrada, visto que essa camada foi retirada do modelo quantizado.
+        return x
 
 
 class QFastSCNN(nn.Module):
@@ -102,23 +132,21 @@ class LinearBottleneck(nn.Module):
         )
         
         # Added quantization for the skip connection
-        self.quant_unpack = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
+        self.shared_quant = qnn.QuantIdentity(act_quant=ParameterizedActQuant,
                                                bit_width=BIT_WIDTH,
-                                               return_quant_tensor=False)
+                                               return_quant_tensor=True)
         
-        self.quant_out = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
-                                           bit_width=BIT_WIDTH,
-                                           return_quant_tensor=True)
-
+        self.out_quant = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
+                                               bit_width=BIT_WIDTH,
+                                               return_quant_tensor=True)
+        
     def forward(self, x):
         out = self.block(x)
-        out = self.quant_out(out)
         if self.use_shortcut:
-            x = self.quant_unpack(x)
-            out = self.quant_unpack(out)
-            out = self.quant_out(x + out)
-        return out
-
+            x = self.shared_quant(x)
+            out = self.shared_quant(out)
+            out = x + out
+        return self.out_quant(out)
 
 class PyramidPooling(nn.Module):
     """Pyramid pooling module"""
@@ -132,31 +160,40 @@ class PyramidPooling(nn.Module):
         self.conv4 = _ConvBNReLU(in_channels, inter_channels, 1, **kwargs)
         self.out = _ConvBNReLU(in_channels * 2, out_channels, 1)
 
-        # Added quantization concatenate tensors
-        self.quant_cat = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
+        # Added quantization for the pooling layers. The original model uses adaptive average pooling, which can be replaced by a quantized version of it.
+        # Necessary to create new instace for each pool size since the output size is a parameter in the quantized version.
+        self.pool1 = qnn.TruncAdaptiveAvgPool2d(output_size=1, return_quant_tensor=True)
+        self.pool2 = qnn.TruncAdaptiveAvgPool2d(output_size=2, return_quant_tensor=True)
+        self.pool4 = qnn.TruncAdaptiveAvgPool2d(output_size=4, return_quant_tensor=True)
+        self.pool8 = qnn.TruncAdaptiveAvgPool2d(output_size=8, return_quant_tensor=True)
+
+        self.quant_upsample = qnn.QuantUpsample(size=None, mode='nearest', return_quant_tensor=True)
+
+        self.shared_act = qnn.QuantIdentity(act_quant=ParameterizedActQuant,
+                                      bit_width=BIT_WIDTH,
+                                      return_quant_tensor=True)
+
+        self.quant_out = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
                                            bit_width=BIT_WIDTH,
                                            return_quant_tensor=True)
 
-    def pool(self, x, size):
-        avgpool = qnn.TruncAdaptiveAvgPool2d(size, return_quant_tensor=True)
-        return avgpool(x)
-
     def upsample(self, x, size):
         # Added quantization for the upsampled features
-        quant_upsample = qnn.QuantUpsample(size, mode='nearest', return_quant_tensor=False)
-        return quant_upsample(x)
+        self.quant_upsample.size = size
+        return self.shared_act(self.quant_upsample(x))
 
     def forward(self, x):
 
         # Original model operations
         size = x.size()[2:]
-        feat1 = self.upsample(self.conv1(self.pool(x, 1)), size)
-        feat2 = self.upsample(self.conv2(self.pool(x, 2)), size)
-        feat3 = self.upsample(self.conv3(self.pool(x, 4)), size) # pool size from 3 to 4 since for onnx export the img size needs to be divisible by the pool size (in this case 32 and 64)
-        feat4 = self.upsample(self.conv4(self.pool(x, 8)), size) # pool size from 6 to 8 since for onnx export the img size needs to be divisible by the pool size (in this case 32 and 64)
+        feat1 = self.upsample(self.conv1(self.pool1(x)), size)
+        feat2 = self.upsample(self.conv2(self.pool2(x)), size)
+        feat3 = self.upsample(self.conv3(self.pool4(x)), size) # pool size from 3 to 4 since for onnx export the img size needs to be divisible by the pool size (in this case 32 and 64)
+        feat4 = self.upsample(self.conv4(self.pool8(x)), size) # pool size from 6 to 8 since for onnx export the img size needs to be divisible by the pool size (in this case 32 and 64)
 
+        x = self.shared_act(x)
         x = torch.cat([x, feat1, feat2, feat3, feat4], dim=1)
-        x = self.quant_cat(x)
+        x = self.quant_out(x)
         x = self.out(x)
         return x
 
@@ -183,9 +220,6 @@ class GlobalFeatureExtractor(nn.Module):
     def __init__(self, in_channels=64, block_channels=(64, 96, 128),
                  out_channels=128, t=6, num_blocks=(3, 3, 3), **kwargs):
         super(GlobalFeatureExtractor, self).__init__()
-
-
-
         self.bottleneck1 = self._make_layer(LinearBottleneck, in_channels, block_channels[0], num_blocks[0], t, 2)
         self.bottleneck2 = self._make_layer(LinearBottleneck, block_channels[0], block_channels[1], num_blocks[1], t, 2)
         self.bottleneck3 = self._make_layer(LinearBottleneck, block_channels[1], block_channels[2], num_blocks[2], t, 1)
@@ -212,39 +246,46 @@ class FeatureFusionModule(nn.Module):
     def __init__(self, highter_in_channels, lower_in_channels, out_channels, scale_factor=4, **kwargs):
         super(FeatureFusionModule, self).__init__()
         self.scale_factor = scale_factor
+
+         # Added quantization for the upsampled features
+        self.quant_upsample = qnn.QuantUpsample(scale_factor=scale_factor, mode='nearest', return_quant_tensor=True)
+
         self.dwconv = _DWConv(lower_in_channels, out_channels, 1)
         self.conv_lower_res = nn.Sequential(
             qnn.QuantConv2d(out_channels, out_channels, 1,
                             weight_bit_width=BIT_WIDTH,
                             weight_quant=Int8WeightPerTensorFloat,
-                            return_quant_tensor=False),
+                            return_quant_tensor=True),
             nn.BatchNorm2d(out_channels)
         )
         self.conv_higher_res = nn.Sequential(
             qnn.QuantConv2d(highter_in_channels, out_channels, 1,
                             weight_bit_width=BIT_WIDTH,
                             weight_quant=Int8WeightPerTensorFloat,
-                            return_quant_tensor=False),
+                            return_quant_tensor=True),
             nn.BatchNorm2d(out_channels)
         )
         self.relu = qnn.QuantReLU(inplace=True, bit_width=BIT_WIDTH, act_quant=Uint8ActPerTensorFloat, return_quant_tensor=True)
 
-        # Added quantization for the skip connection     
-        self.quant_sum = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
-                                           bit_width=BIT_WIDTH,
-                                           return_quant_tensor=True)
+        # Added quantization for the skip connection
+        self.shared_quant = qnn.QuantIdentity(act_quant=ParameterizedActQuant,
+                                               bit_width=BIT_WIDTH,
+                                               return_quant_tensor=True)
+                                           
 
     def forward(self, higher_res_feature, lower_res_feature):
 
-        # Added quantization for the upsampled features
-        quant_upsample = qnn.QuantUpsample(scale_factor=4, mode='nearest', return_quant_tensor=True)
-
-        lower_res_feature = quant_upsample(lower_res_feature)
+        lower_res_feature = self.quant_upsample(lower_res_feature)
         lower_res_feature = self.dwconv(lower_res_feature)
         lower_res_feature = self.conv_lower_res(lower_res_feature)
 
         higher_res_feature = self.conv_higher_res(higher_res_feature)
-        out = self.quant_sum(higher_res_feature + lower_res_feature)
+
+        # Added quantization for the features before the fusion
+        lower_res_feature = self.shared_quant(lower_res_feature)
+        higher_res_feature = self.shared_quant(higher_res_feature)
+
+        out = higher_res_feature + lower_res_feature
         return self.relu(out)
 
 

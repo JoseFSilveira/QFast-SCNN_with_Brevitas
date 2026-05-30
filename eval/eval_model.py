@@ -4,6 +4,7 @@ from tqdm.auto import tqdm
 from pathlib import Path
 from config import NUM_CLASSES
 
+
 class EvalModel():
     def __init__(self, model: torch.nn.Module, state_dict_path: str=None, results_path: str=None, device: torch.device='cpu'):
 
@@ -14,7 +15,6 @@ class EvalModel():
 
         if state_dict_path is not None:
             self.load_state_dict()
-        self.compiled_model = torch.compile(self.model)
 
         if results_path is not None:
             self.train_results = self.load_results()
@@ -73,7 +73,7 @@ class EvalModel():
 
     def eval(self, dataloader: torch.utils.data.DataLoader, metrics: dict, loss_fn: callable=None):
 
-        self.compiled_model.eval()
+        self.model.eval()
 
         metric_names = list(metrics.keys())
         metric_fns = list(metrics.values()) 
@@ -87,7 +87,7 @@ class EvalModel():
         with torch.inference_mode():
             for (X, y) in tqdm(dataloader):
                 X, y = X.to(self.device), y.to(self.device)
-                y_pred = self.compiled_model(X)
+                y_pred = self.model(X)
 
                 if loss_fn is not None:
                     val_loss += loss_fn(y_pred, y.long()).item() # Accumulate the scalar value

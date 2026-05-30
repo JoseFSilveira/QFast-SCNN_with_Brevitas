@@ -1,28 +1,8 @@
 # tqdm.auto
-import torch
-import torch.nn.functional as F
 from pathlib import Path
-from config import NUM_CLASSES
 from train.train_model import TrainModel
+from models.QFastSCNN import QATwrapper
 
-
-class QATwrapper(torch.nn.Module):
-    '''
-    Wrapper para o modelo quantizado, com as camadas do Fast-SCNN que foram retiradas do original para facilitar a exportacao para o FINN.
-    '''
-
-    def __init__(self, model: torch.nn.Module):
-        super().__init__()
-        self.model = model
-
-    def output_upsample(self, output: torch.Tensor, size: list[int]) -> torch.Tensor:
-        return F.interpolate(output, size=size, mode='bilinear', align_corners=True)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        size = list(x.shape[2:]) # Salva o tamanho original da entrada para usar no upsample da saida
-        x = self.model(x)
-        x = self.output_upsample(x, size) # Redimenciona a saida para o mesmo tamanho da entrada, visto que essa camada foi retirada do modelo quantizado.
-        return x
 
 class TrainQuantModel(TrainModel):
 
