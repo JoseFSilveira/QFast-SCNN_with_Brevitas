@@ -178,9 +178,28 @@ def load_state_dict(model: torch.nn.Module, path: str, strict: bool = True, igno
     # OBS: torch.load() carrega o modelo inteiro, nao apenas os parametros
     path = Path(path)
     model_name = path.stem # Extrai o nome do modelo a partir do caminho dado
+
     if path.is_file():
         print(f"Carregando modelo {model_name}")
-        missing_keys, unexpected_keys = model.load_state_dict(torch.load(f=path), strict=strict)
+
+        # Carregamos o dicionário de pesos bruto do arquivo
+        state_dict = torch.load(f=path)
+        
+        # Limpando os prefixos indesejados
+        cleaned_state_dict = {}
+        for key, value in state_dict.items():
+            # Se o PyTorch salvou com o prefixo 'model.', nós removemos os 6 primeiros caracteres
+            if key.startswith('model.'):
+                new_key = key[6:]
+            # Outro caso muito comum se você usar DataParallel ou DDP no futuro
+            elif key.startswith('module.'):
+                new_key = key[7:]
+            else:
+                new_key = key
+                
+            cleaned_state_dict[new_key] = value
+
+        missing_keys, unexpected_keys = model.load_state_dict(cleaned_state_dict, strict=strict)
 
         # Verificando se existem chaves faltando ou chaves inesperadas
         if strict == False:
