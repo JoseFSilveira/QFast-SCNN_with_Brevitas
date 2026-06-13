@@ -23,7 +23,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True" # Habilita a 
 SCRIPT_MODE = "BOTH" # "TRAIN", "TEST" ou "BOTH"
 GENERATE_HISTOGRAM = False
 
-DATA_PATH = '/home/jose-vitor/Documents/Cityscapes_Dataset/fine'
+DATA_PATH = '~/Documents/Cityscapes_Dataset/fine'
 
 NUM_WORKERS = os.cpu_count() // 2 # Numero de workers para os dataloaders, ajustado para metade do numero de CPUs disponiveis para evitar sobrecarga do sistema.
 
