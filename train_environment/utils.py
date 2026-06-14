@@ -188,10 +188,10 @@ def load_state_dict(model: torch.nn.Module, path: str, strict: bool = True, igno
         # Limpando os prefixos indesejados
         cleaned_state_dict = {}
         for key, value in state_dict.items():
-            # Se o PyTorch salvou com o prefixo 'model.', nós removemos os 6 primeiros caracteres
+            # Se o PyTorch salvou com o prefixo 'model.', remove os 6 primeiros caracteres
             if key.startswith('model.'):
                 new_key = key[6:]
-            # Outro caso muito comum se você usar DataParallel ou DDP no futuro
+            # Analogo para 'module.', que ocorre quando o modelo foi treinado usando DataParallel ou DistributedDataParallel.
             elif key.startswith('module.'):
                 new_key = key[7:]
             else:
@@ -220,7 +220,7 @@ def load_state_dict(model: torch.nn.Module, path: str, strict: bool = True, igno
                                   f"{error_missing_keys}\n")
 
     else:
-        print(f"Pesoss do modelo {model_name} nao encontrados.")
+        print(f"Pesos do modelo {model_name} nao encontrados.")
 
     return model
 
