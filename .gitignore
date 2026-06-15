@@ -9,5 +9,10 @@
 *.pyc
 *.code-workspace
 
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
 # Ignore Datasets
 Cityscapes_Dataset/
