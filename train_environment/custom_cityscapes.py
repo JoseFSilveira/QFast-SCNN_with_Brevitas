@@ -150,8 +150,7 @@ class AugmentedCityscapes(datasets.Cityscapes):
         if self.data_augmentation is not None:
 
             # tv_tensors informama ao v2 que o 'image' é uma Imagem e 'target' é uma Mascara.
-            # Isso garante que rotacoes/flips sejam aplicados em ambos,
-            # e que ajustes de cor (se houver) sejam aplicados APENAS na imagem.
+            # Isso garante que rotacoes/flips sejam aplicados em ambos, e que ajustes de cor (se houver) sejam aplicados APENAS na imagem.
             image, target = self.data_augmentation(tv_tensors.Image(image), tv_tensors.Mask(target))
             
         if self.post_data_augmentation is not None:

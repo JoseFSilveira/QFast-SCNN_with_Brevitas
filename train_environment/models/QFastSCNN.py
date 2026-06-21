@@ -8,7 +8,8 @@ The following changes to make it compatible with quantization and translation to
 --> Upsample and pooling operations are quantized to avoid issues when translating the model to ONNX and then to FINN, which do not support non-quantized operations in the middle of the model.
 --> The last upsampling layer is removed to avoid a large upsampling factor with 'nearest' mode, which can comprimise severly the accuracy of the model.
   obs: The last upsampling layer can be done in external post-processing step, with the output of the model being passed to a CPU or small GPU.
---> Added QAT wrapper to include the last upsampling layer that was removed from the model, to be used only during training and then removed for export to ONNX and FINN.
+--> Added "qat" mode to the model, which allows for quantization-aware training and export to ONNX and FINN. This mode enables the final upsampling layer to be used.
+--> Added "finn" mode to the model, which is used for QONNX export for FINN framework. In this mode, the input preprocessing is done in the model, since FINN expects uint8 inputs.
 '''
 
 import torch
@@ -30,42 +31,38 @@ class ParameterizedActQuant(Int8ActPerTensorFloat):
     min_val = -6.0
 
 
-class QATwrapper(torch.nn.Module):
-    '''
-    Wrapper for the quantized model, with the layers of Fast-SCNN that were removed from the original to facilitate the export to FINN.
-    '''
-    def __init__(self, model: torch.nn.Module):
-        super().__init__()
-        self.model = model
-
-    def output_upsample(self, output: torch.Tensor, size: list[int]) -> torch.Tensor:
-        return F.interpolate(output, size=size, mode='bilinear', align_corners=True)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        size = list(x.shape[2:]) # Salva o tamanho original da entrada para usar no upsample da saida
-        x = self.model(x)
-        x = self.output_upsample(x, size) # Redimenciona a saida para o mesmo tamanho da entrada, visto que essa camada foi retirada do modelo quantizado.
-        return x
-
-
 class QFastSCNN(nn.Module):
 
-    def __init__(self, num_classes, **kwargs):
+    def __init__(self, num_classes, mode="raw", **kwargs):
         super().__init__()
+
+        # This modified model has modes instead of wrappers to facilitate state dict management when saving and loading the model.
+        possible_modes = ["raw", "qat", "finn"]
+        assert mode in possible_modes, f"Mode {mode} not supported. Choose one of {possible_modes}."
+        self.mode = mode
+
         self.inp_quant = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat, return_quant_tensor=True)
         self.learning_to_downsample = LearningToDownsample(32, 48, 64)
         self.global_feature_extractor = GlobalFeatureExtractor(64, [64, 96, 128], 128, 6, [3, 3, 3])
         self.feature_fusion = FeatureFusionModule(64, 128, 128)
         self.classifier = Classifer(128, num_classes)
 
+        # Only used in "finn" mode. FINN expects the input to be uint8, so the normalization is done in the model.
+        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+
     def forward(self, x):
-        #size = x.size()[2:]
+        if self.mode == "qat":
+            size = x.size()[2:] # Saves the original size of the input to upsample the output.
+        if self.mode == "finn":
+            x = ((x / 225.0) - self.mean) / self.std
         x = self.inp_quant(x)
         higher_res_features = self.learning_to_downsample(x)
         x = self.global_feature_extractor(higher_res_features)
         x = self.feature_fusion(higher_res_features, x)
         x = self.classifier(x)
-        #x = F.interpolate(x, size, mode='bilinear', align_corners=True)
+        if self.mode == "qat":
+            x = F.interpolate(x, size, mode='bilinear', align_corners=True)
         return x
 
 
