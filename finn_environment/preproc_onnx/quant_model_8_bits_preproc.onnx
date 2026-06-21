@@ -1,4 +1,4 @@
-pytorch2.8.0:é¤¡
+pytorch2.8.0:Ž¥¡
 1
 	global_in
 Div_0_param0
@@ -20081,6 +20081,8 @@ Add_6_out0
 finn_datatypeSCALEDINT<8>r&
 
 global_out
-finn_datatypeFLOAT32B
+finn_datatypeFLOAT32r#
+	global_in
+finn_datatypeUINT8B
  B
 qonnx.custom_op.general
