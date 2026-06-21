@@ -32,6 +32,7 @@ NUM_WORKERS = os.cpu_count() // 2 # Numero de workers para os dataloaders, ajust
 #IM_WIDTH = 1024
 IM_HEIGHT = 1024
 IM_WIDTH = 2048
+IM_SIZE = [IM_HEIGHT, IM_WIDTH] # Tamanho da imagem de entrada para o modelo, que deve ser consistente com o tamanho das imagens do dataset.
 CROP_SIZE = [768, 768] # Tamanho do crop aleatorio aplicado durante a data augmentation, o qual ajuda a reduzir o uso de memoria durante o treinamento do modelo quantizado
 
 # Dataset configs
