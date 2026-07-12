@@ -3,13 +3,13 @@ Based on the modified version of Fast-SCNN in models/FastSCNN.py, changing the t
 The following changes to make it compatible with quantization and translation to ONNX and then to FINN:
 --> The input and activations are quantized to 8 bits using per-tensor quantization with a floating-point scale.
 --> The weights are quantized to 8 bits using per-tensor quantization with a floating-point scale.
---> F.interpolate is replaced by qnn.QuantUpsample with 'nearest' mode.
---> The pooling layers are quantized using qnn.TruncAdaptiveAvgPool2d. One for each pool size since the output size is a parameter in the quantized version.
---> Upsample and pooling operations are quantized to avoid issues when translating the model to ONNX and then to FINN, which do not support non-quantized operations in the middle of the model.
---> The last upsampling layer is removed to avoid a large upsampling factor with 'nearest' mode, which can comprimise severly the accuracy of the model.
-  obs: The last upsampling layer can be done in external post-processing step, with the output of the model being passed to a CPU or small GPU.
 --> Added "qat" mode to the model, which allows for quantization-aware training and export to ONNX and FINN. This mode enables the final upsampling layer to be used.
 --> Added "finn" mode to the model, which is used for QONNX export for FINN framework. In this mode, the input preprocessing is done in the model, since FINN expects uint8 inputs.
+--> F.interpolate is replaced by qnn.QuantConvTranspose2d with frozen weights of torch.ones().
+--> The pooling layers are quantized using qnn.TruncAdaptiveAvgPool2d. One for each pool size since the output size is a parameter in the quantized version.
+--> Pooling operations are quantized to avoid issues when translating the model to ONNX and then to FINN.
+--> The last upsampling layer is removed to avoid a large upsampling factor with 'nearest' mode, which can comprimise severly the accuracy of the model.
+  obs: The last upsampling layer can be done in external post-processing step, with the output of the model being passed to a CPU or small GPU.
 '''
 
 import torch
@@ -20,7 +20,22 @@ from brevitas.quant.scaled_int import Int8WeightPerTensorFloat, Uint8ActPerTenso
 from brevitas.quant_tensor import QuantTensor
 from brevitas.inject.enum import *
 
-from config import BIT_WIDTH
+from config import BIT_WIDTH, IM_SIZE
+
+
+def get_upsample_callable(channels, scale_factor):
+    """
+    Returns a callable that performs upsampling using a quantized transposed convolution with frozen weights of torch.ones(). This is used to replace F.interpolate in the model, which is not supported by FINN.
+    """
+    return qnn.QuantConvTranspose2d(channels, channels, scale_factor,
+                                    stride=scale_factor,
+                                    padding=0, 
+                                    groups=channels,
+                                    bias=False,
+                                    weight_bit_width=BIT_WIDTH,
+                                    weight_quant=Int8WeightPerTensorFloat,
+                                    return_quant_tensor=True)
+
 
 class ParameterizedActQuant(Int8ActPerTensorFloat):
     '''
@@ -147,7 +162,12 @@ class LinearBottleneck(nn.Module):
         return self.out_quant(out)
 
 class PyramidPooling(nn.Module):
-    """Pyramid pooling module"""
+    """
+    Pyramid pooling module
+    --> The pool sizes were changed from [1, 2, 3, 6] to [1, 2, 4, 8] since for onnx export the img size needs to be divisible by the pool size (in this case 32 and 64).
+    --> The original model uses adaptive average pooling, which can be replaced by a quantized version of it.
+    --> The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones() to avoid issues when translating the model to ONNX and then to FINN, since onnx runtime outputs an error when a Resize block parameter is empty.
+    """
 
     def __init__(self, in_channels, out_channels, **kwargs):
         super(PyramidPooling, self).__init__()
@@ -158,36 +178,62 @@ class PyramidPooling(nn.Module):
         self.conv4 = _ConvBNReLU(in_channels, inter_channels, 1, **kwargs)
         self.out = _ConvBNReLU(in_channels * 2, out_channels, 1)
 
-        # Added quantization for the pooling layers. The original model uses adaptive average pooling, which can be replaced by a quantized version of it.
-        # Necessary to create new instace for each pool size since the output size is a parameter in the quantized version.
-        self.pool1 = qnn.TruncAdaptiveAvgPool2d(output_size=1, return_quant_tensor=True)
-        self.pool2 = qnn.TruncAdaptiveAvgPool2d(output_size=2, return_quant_tensor=True)
-        self.pool4 = qnn.TruncAdaptiveAvgPool2d(output_size=4, return_quant_tensor=True)
-        self.pool8 = qnn.TruncAdaptiveAvgPool2d(output_size=8, return_quant_tensor=True)
+        self.pool_output_sizes = [1, 2, 4, 8]  # Pool sizes for the pyramid pooling layers
 
-        self.quant_upsample = qnn.QuantUpsample(size=None, mode='nearest', return_quant_tensor=True)
+        # Added quantization for the pooling layers. The original model uses adaptive average pooling, which can be replaced by a quantized version of it.
+        # Necessary to create new instance for each pool size since the output size is a parameter in the quantized version.
+        self.pool1 = qnn.TruncAdaptiveAvgPool2d(output_size=self.pool_output_sizes[0], return_quant_tensor=True)
+        self.pool2 = qnn.TruncAdaptiveAvgPool2d(output_size=self.pool_output_sizes[1], return_quant_tensor=True)
+        self.pool4 = qnn.TruncAdaptiveAvgPool2d(output_size=self.pool_output_sizes[2], return_quant_tensor=True)
+        self.pool8 = qnn.TruncAdaptiveAvgPool2d(output_size=self.pool_output_sizes[3], return_quant_tensor=True)
+
+        ## -- BEGIN OF QUANTIZED UPSAMPLE DEFINITION -- ##
+        '''
+        Added quantization for the upsampled features. The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones()
+        This modification is to avoid issues when translating the model to ONNX and then to FINN, since onnx runtime outputs an error when a Resize block parameter is empty.
+        '''
+        
+        # Defining the output size for the PiramidPooling class
+        ff_out_size = tuple(im_size // 32 for im_size in IM_SIZE) # The original model uses a fixed input size of 1024x2048, which is downsampled by a factor of 32 before the PyramidPooling.
+
+        # Defining the upsample layers for each pooling layer. The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones().
+        self.upsample1 = get_upsample_callable(inter_channels, tuple(size // self.pool_output_sizes[0] for size in ff_out_size))
+        self.upsample2 = get_upsample_callable(inter_channels, tuple(size // self.pool_output_sizes[1] for size in ff_out_size))
+        self.upsample4 = get_upsample_callable(inter_channels, tuple(size // self.pool_output_sizes[2] for size in ff_out_size))
+        self.upsample8 = get_upsample_callable(inter_channels, tuple(size // self.pool_output_sizes[3] for size in ff_out_size))
+
+        # Initialize the weights to 1.0 and freeze them to mimic the behavior of F.interpolate with mode='nearest'.
+        nn.init.constant_(self.upsample1.weight, 1.0)
+        for param in self.upsample1.parameters():
+            param.requires_grad = False
+        nn.init.constant_(self.upsample2.weight, 1.0)
+        for param in self.upsample2.parameters():
+            param.requires_grad = False
+        nn.init.constant_(self.upsample4.weight, 1.0)
+        for param in self.upsample4.parameters():
+            param.requires_grad = False
+        nn.init.constant_(self.upsample8.weight, 1.0)
+        for param in self.upsample8.parameters():
+            param.requires_grad = False
+
+        ## -- END OF QUANTIZED UPSAMPLE DEFINITION -- ##
 
         self.shared_act = qnn.QuantIdentity(act_quant=ParameterizedActQuant,
-                                      bit_width=BIT_WIDTH,
-                                      return_quant_tensor=True)
+                                            bit_width=BIT_WIDTH,
+                                            return_quant_tensor=True)
 
         self.quant_out = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
                                            bit_width=BIT_WIDTH,
                                            return_quant_tensor=True)
 
-    def upsample(self, x, size):
-        # Added quantization for the upsampled features
-        self.quant_upsample.size = size
-        return self.shared_act(self.quant_upsample(x))
-
     def forward(self, x):
 
         # Original model operations
         size = x.size()[2:]
-        feat1 = self.upsample(self.conv1(self.pool1(x)), size)
-        feat2 = self.upsample(self.conv2(self.pool2(x)), size)
-        feat3 = self.upsample(self.conv3(self.pool4(x)), size) # pool size from 3 to 4 since for onnx export the img size needs to be divisible by the pool size (in this case 32 and 64)
-        feat4 = self.upsample(self.conv4(self.pool8(x)), size) # pool size from 6 to 8 since for onnx export the img size needs to be divisible by the pool size (in this case 32 and 64)
+        feat1 = self.shared_act(self.upsample1(self.conv1(self.pool1(x))))
+        feat2 = self.shared_act(self.upsample2(self.conv2(self.pool2(x))))
+        feat3 = self.shared_act(self.upsample4(self.conv3(self.pool4(x))))
+        feat4 = self.shared_act(self.upsample8(self.conv4(self.pool8(x))))
 
         x = self.shared_act(x)
         x = torch.cat([x, feat1, feat2, feat3, feat4], dim=1)
@@ -243,10 +289,13 @@ class FeatureFusionModule(nn.Module):
 
     def __init__(self, highter_in_channels, lower_in_channels, out_channels, scale_factor=4, **kwargs):
         super(FeatureFusionModule, self).__init__()
-        self.scale_factor = scale_factor
 
-         # Added quantization for the upsampled features
-        self.quant_upsample = qnn.QuantUpsample(scale_factor=scale_factor, mode='nearest', return_quant_tensor=True)
+        # Added quantization for the upsampled features. The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones()
+        # This modification is to avoid issues when translating the model to ONNX and then to FINN, since onnx runtime outputs an error when a Resize block parameter is empty.
+        self.upsample = get_upsample_callable(lower_in_channels, scale_factor)
+        nn.init.constant_(self.upsample.weight, 1.0) # Initialize the weights to 1.0 to mimic the behavior of F.interpolate with mode='nearest'.
+        for param in self.upsample.parameters():
+            param.requires_grad = False # freeze the weights to avoid training them, since they are not learnable parameters.
 
         self.dwconv = _DWConv(lower_in_channels, out_channels, 1)
         self.conv_lower_res = nn.Sequential(
@@ -273,7 +322,7 @@ class FeatureFusionModule(nn.Module):
 
     def forward(self, higher_res_feature, lower_res_feature):
 
-        lower_res_feature = self.quant_upsample(lower_res_feature)
+        lower_res_feature = self.upsample(lower_res_feature)
         lower_res_feature = self.dwconv(lower_res_feature)
         lower_res_feature = self.conv_lower_res(lower_res_feature)
 
