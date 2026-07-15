@@ -62,16 +62,25 @@ class QFastSCNN(nn.Module):
         self.feature_fusion = FeatureFusionModule(64, 128, 128)
         self.classifier = Classifer(128, num_classes)
 
+        # Pre calculating the input normalization to reduce the number of operation in the model. This is done fora a more hardware friendly implementation.
+        # The original operation for the forward pass is: x = ((x / 225.0) - self.mean) / self.std)
+        # The goal is to only perform x = x * A - B, where A and B are pre-calculated constants.
         # Only used in "finn" mode. FINN expects the input to be uint8, so the normalization is done in the model.
         if self.mode == "finn":
-            self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-            self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+            mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+            finn_A = (1.0 / (255.0 * std))
+            finn_B = (mean / std)
+            self.register_buffer('finn_A', finn_A)
+            self.register_buffer('finn_B', finn_B)
+
 
     def forward(self, x):
         if self.mode == "qat":
             size = x.size()[2:] # Saves the original size of the input to upsample the output.
         if self.mode == "finn":
-            x = ((x / 225.0) - self.mean) / self.std
+            # doing the hardware (finn) friendly version of x = ((x / 225.0) - self.mean) / self.std)
+            x = (x * self.finn_A - self.finn_B)
         x = self.inp_quant(x)
         higher_res_features = self.learning_to_downsample(x)
         x = self.global_feature_extractor(higher_res_features)
