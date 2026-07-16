@@ -64,7 +64,7 @@ class QFastSCNN(nn.Module):
 
         # Pre calculating the input normalization to reduce the number of operation in the model. This is done fora a more hardware friendly implementation.
         # The original operation for the forward pass is: x = ((x / 225.0) - self.mean) / self.std)
-        # The goal is to only perform x = x * A - B, where A and B are pre-calculated constants.
+        # The goal is to only perform x = x * finn_A - finn_B, where finn_A and finn_B are pre-calculated constants.
         # Only used in "finn" mode. FINN expects the input to be uint8, so the normalization is done in the model.
         if self.mode == "finn":
             mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
