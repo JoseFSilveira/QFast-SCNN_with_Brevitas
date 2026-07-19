@@ -1,4 +1,4 @@
-pytorch2.8.0:ìî·
+pytorch2.8.0:÷ğ·
 1
 	global_in
 Mul_0_param0
@@ -1415,19 +1415,33 @@ Add_5_out0
 narrow  *
 rounding_mode"ROUND *
 signed :qonnx.custom_op.general
-Q
-Quant_95_out0GlobalAveragePool_0_out0GlobalAveragePool_0"GlobalAveragePool
-h
-Quant_95_out0AveragePool_0_out0AveragePool_0"AveragePool*
-kernel_shape@@  *
+§
+Quant_95_out0AveragePool_0_out0AveragePool_0"AveragePool*
+	ceil_mode  *
+count_include_pad *
+kernel_shape@ @@ *
+pads@ @ @ @  *
+strides@ @@ 
+§
+Quant_95_out0AveragePool_1_out0AveragePool_1"AveragePool*
+	ceil_mode  *
+count_include_pad *
+kernel_shape@@  *
+pads@ @ @ @  *
 strides@@  
-h
-Quant_95_out0AveragePool_1_out0AveragePool_1"AveragePool*
-kernel_shape@@ *
+§
+Quant_95_out0AveragePool_2_out0AveragePool_2"AveragePool*
+	ceil_mode  *
+count_include_pad *
+kernel_shape@@ *
+pads@ @ @ @  *
 strides@@ 
-h
-Quant_95_out0AveragePool_2_out0AveragePool_2"AveragePool*
-kernel_shape@@ *
+§
+Quant_95_out0AveragePool_3_out0AveragePool_3"AveragePool*
+	ceil_mode  *
+count_include_pad *
+kernel_shape@@ *
+pads@ @ @ @  *
 strides@@ 
 ´
 Quant_95_out0
@@ -1437,8 +1451,8 @@ h
 narrow  *
 rounding_mode"ROUND *
 signed :qonnx.custom_op.general
-Ú
-GlobalAveragePool_0_out0
+Ô
+AveragePool_0_out0
 Trunc_0_param0
 Trunc_0_param1
 Trunc_0_param2
@@ -1448,7 +1462,7 @@ h
 rounding_mode"round *
 signed :qonnx.custom_op.general
 Ô
-AveragePool_0_out0
+AveragePool_1_out0
 Trunc_1_param0
 Trunc_1_param1
 Trunc_1_param2
@@ -1458,7 +1472,7 @@ h
 rounding_mode"round *
 signed :qonnx.custom_op.general
 Ô
-AveragePool_1_out0
+AveragePool_2_out0
 Trunc_2_param0
 Trunc_2_param1
 Trunc_2_param2
@@ -1468,7 +1482,7 @@ h
 rounding_mode"round *
 signed :qonnx.custom_op.general
 Ô
-AveragePool_2_out0
+AveragePool_3_out0
 Trunc_3_param0
 Trunc_3_param1
 Trunc_3_param2
@@ -16912,8 +16926,8 @@ M¾lŞ&¼Åš½ÊÎ;¾xiû½`9ƒ=Zãs½÷÷(½—Ç=½<»³>±F ½'±>–å¼§5²¼/´½{n½ˆRï=›{`¾	s>p°¥=DÜ
 ¾Ğûƒ½é:$½G}›½áw¾%Tn>}û<$®='Ùœ½‚!Ÿ½ÓÄ¡>ı¾*bBConv_44_param0JL´ã>Z«Ô=$?è?±<y¡H½ÓæÃ½ìÆ€¾ “¾U# >µ¼–P¾$w>)‡œ¾Fİ >_¾è½<On¾Á=M¾
 q¾*BQuant_50_param0JŸ©<*BQuant_0_param2J    *BQuant_0_param3J   A*BQuant_0_param1Jva‡;*BQuant_51_param0J;•<*BQuant_1_param1JŸ(<*BQuant_52_param0J¤2=*BQuant_2_param1J‹?Û;*BQuant_53_param0J§¼´<*BQuant_3_param1Jg£è;*BQuant_54_param0J ›Ô<*BQuant_4_param1J7à”;*BQuant_55_param0J8ÒH<*BQuant_5_param1J3;*BQuant_57_param0J’Æt<*BQuant_6_param1Ju†+;*BQuant_58_param0JK[R<*BQuant_7_param1JãïÓ:*BQuant_59_param0JšÓÄ<*BQuant_8_param1J_§»:*BQuant_61_param0J|6<*BQuant_9_param1Jò{	;*BQuant_62_param0J+ºB<*BQuant_10_param1J¿¢Ã:*BQuant_60_param0J1º>=*BQuant_64_param0JŸÉü<*BQuant_11_param1Jx
 ğ:*BQuant_66_param0JÕ+<*BQuant_12_param1J6z
-;*BQuant_67_param0J’V<*BQuant_13_param1JåôÁ:*BQuant_65_param0Jgv?=*BQuant_69_param0J4 =*BQuant_14_param1J0å:*BQuant_70_param0JV•*<*BQuant_15_param1JùÔ:*BQuant_71_param0J¤ËR<*BQuant_16_param1Jîˆä:*BQuant_72_param0J¨T<*BQuant_17_param1JÛª©:*BQuant_74_param0J!Ó"<*BQuant_18_param1J»óş:*BQuant_75_param0J1õ4<*BQuant_19_param1J9 ¿:*BQuant_73_param0J23>=*BQuant_77_param0J+ÔÁ<*BQuant_20_param1J	í­:*BQuant_79_param0J–¾<*BQuant_21_param1J²-;*BQuant_80_param0Jœ8-<*BQuant_22_param1J¿óª:*BQuant_78_param0Jò>=*BQuant_82_param0JèiÚ<*BQuant_23_param1J‚²:*BQuant_83_param0J “<*BQuant_24_param1JCÜ;*BQuant_84_param0JÒG<*BQuant_25_param1J\¶:*BQuant_85_param0J.Şƒ<*BQuant_26_param1Jà¹¡:*BQuant_87_param0JìÅ<*BQuant_27_param1J5‡Ü:*BQuant_88_param0J ÊT<*BQuant_28_param1JÁ:*BQuant_86_param0J<í<=*BQuant_90_param0Jí©š<*BQuant_29_param1JÂºã:*BQuant_92_param0J¸Ô<*BQuant_30_param1Jï3;*BQuant_93_param0J•ÛP<*BQuant_31_param1J¼ˆ§:*BQuant_91_param0Jq>=*BQuant_95_param0Jˆ™³<*BTrunc_0_param0Jˆ™37*BQuant_32_param1J¾ûË:*BQuant_97_param0JÎOb;*BQuant_33_param1J<*BQuant_96_param0J¥>=*BTrunc_1_param0Jˆ™38*BQuant_34_param1J×=Å:*BQuant_98_param0J=´³;*BTrunc_2_param0Jˆ™39*BQuant_36_param1JqiÄ:*BQuant_99_param0JJÚÔ;*BTrunc_3_param0Jˆ™3:*BQuant_38_param1JG¥:*BQuant_100_param0Jèı<*BQuant_105_param0J‚è®<*BQuant_40_param1J'º;*BQuant_106_param0J›¢<*BQuant_42_param1JßÛÈ:*BQuant_107_param0J-´p<*BQuant_43_param1J¯Q[;*BQuant_44_param1J
-ş:*BQuant_56_param0JŸˆ9=*BQuant_109_param0Jİ¬^<*BQuant_45_param1JS‘;*BQuant_110_param0J÷L<*BQuant_46_param1JVÑ$;*BQuant_111_param0JÓj<*BQuant_47_param1J¢Qİ:*BQuant_112_param0J¥Tİ;*BQuant_48_param1J÷'?;*BQuant_113_param0JµÉ–<*BQuant_49_param1JŠà;*BQuant_1_param2J    *BQuant_1_param3J   A*BQuant_2_param2J    *BQuant_2_param3J   A*BQuant_3_param2J    *BQuant_3_param3J   A*BQuant_4_param2J    *BQuant_4_param3J   A*BQuant_5_param2J    *BQuant_5_param3J   A*BQuant_6_param2J    *BQuant_6_param3J   A*BQuant_7_param2J    *BQuant_7_param3J   A*BQuant_8_param2J    *BQuant_8_param3J   A*BQuant_9_param2J    *BQuant_9_param3J   A*BQuant_10_param2J    *BQuant_10_param3J   A*BQuant_11_param2J    *BQuant_11_param3J   A*BQuant_12_param2J    *BQuant_12_param3J   A*BQuant_13_param2J    *BQuant_13_param3J   A*BQuant_14_param2J    *BQuant_14_param3J   A*BQuant_15_param2J    *BQuant_15_param3J   A*BQuant_16_param2J    *BQuant_16_param3J   A*BQuant_17_param2J    *BQuant_17_param3J   A*BQuant_18_param2J    *BQuant_18_param3J   A*BQuant_19_param2J    *BQuant_19_param3J   A*BQuant_20_param2J    *BQuant_20_param3J   A*BQuant_21_param2J    *BQuant_21_param3J   A*BQuant_22_param2J    *BQuant_22_param3J   A*BQuant_23_param2J    *BQuant_23_param3J   A*BQuant_24_param2J    *BQuant_24_param3J   A*BQuant_25_param2J    *BQuant_25_param3J   A*BQuant_26_param2J    *BQuant_26_param3J   A*BQuant_27_param2J    *BQuant_27_param3J   A*BQuant_28_param2J    *BQuant_28_param3J   A*BQuant_29_param2J    *BQuant_29_param3J   A*BQuant_30_param2J    *BQuant_30_param3J   A*BQuant_31_param2J    *BQuant_31_param3J   A*BQuant_32_param2J    *BQuant_32_param3J   A*BQuant_33_param2J    *BQuant_33_param3J   A*BQuant_34_param2J    *BQuant_34_param3J   A*BQuant_35_param1J<*BQuant_35_param2J    *BQuant_35_param3J   A*BQuant_36_param2J    *BQuant_36_param3J   A*BQuant_37_param1J<*BQuant_37_param2J    *BQuant_37_param3J   A*BQuant_38_param2J    *BQuant_38_param3J   A*BQuant_39_param1J<*BQuant_39_param2J    *BQuant_39_param3J   A*BQuant_40_param2J    *BQuant_40_param3J   A*BQuant_41_param1J<*BQuant_41_param2J    *BQuant_41_param3J   A*BQuant_42_param2J    *BQuant_42_param3J   A*BQuant_43_param2J    *BQuant_43_param3J   A*BQuant_44_param2J    *BQuant_44_param3J   A*BQuant_45_param2J    *BQuant_45_param3J   A*BQuant_46_param2J    *BQuant_46_param3J   A*BQuant_47_param2J    *BQuant_47_param3J   A*BQuant_48_param2J    *BQuant_48_param3J   A*BQuant_49_param2J    *BQuant_49_param3J   A*BQuant_50_param1J    *BQuant_50_param2J   A*BQuant_51_param1J    *BQuant_51_param2J   A*BQuant_52_param1J    *BQuant_52_param2J   A*BQuant_53_param1J    *BQuant_53_param2J   A*BQuant_54_param1J    *BQuant_54_param2J   A*BQuant_55_param1J    *BQuant_55_param2J   A*BQuant_56_param1J    *BQuant_56_param2J   A*BQuant_57_param1J    *BQuant_57_param2J   A*BQuant_58_param1J    *BQuant_58_param2J   A*BQuant_59_param1J    *BQuant_59_param2J   A*BQuant_60_param1J    *BQuant_60_param2J   A*BQuant_61_param1J    *BQuant_61_param2J   A*BQuant_62_param1J    *BQuant_62_param2J   A*BQuant_63_param0J1º>=*BQuant_63_param1J    *BQuant_63_param2J   A*BQuant_64_param1J    *BQuant_64_param2J   A*BQuant_65_param1J    *BQuant_65_param2J   A*BQuant_66_param1J    *BQuant_66_param2J   A*BQuant_67_param1J    *BQuant_67_param2J   A*BQuant_68_param0Jgv?=*BQuant_68_param1J    *BQuant_68_param2J   A*BQuant_69_param1J    *BQuant_69_param2J   A*BQuant_70_param1J    *BQuant_70_param2J   A*BQuant_71_param1J    *BQuant_71_param2J   A*BQuant_72_param1J    *BQuant_72_param2J   A*BQuant_73_param1J    *BQuant_73_param2J   A*BQuant_74_param1J    *BQuant_74_param2J   A*BQuant_75_param1J    *BQuant_75_param2J   A*BQuant_76_param0J23>=*BQuant_76_param1J    *BQuant_76_param2J   A*BQuant_77_param1J    *BQuant_77_param2J   A*BQuant_78_param1J    *BQuant_78_param2J   A*BQuant_79_param1J    *BQuant_79_param2J   A*BQuant_80_param1J    *BQuant_80_param2J   A*BQuant_81_param0Jò>=*BQuant_81_param1J    *BQuant_81_param2J   A*BQuant_82_param1J    *BQuant_82_param2J   A*BQuant_83_param1J    *BQuant_83_param2J   A*BQuant_84_param1J    *BQuant_84_param2J   A*BQuant_85_param1J    *BQuant_85_param2J   A*BQuant_86_param1J    *BQuant_86_param2J   A*BQuant_87_param1J    *BQuant_87_param2J   A*BQuant_88_param1J    *BQuant_88_param2J   A*BQuant_89_param0J<í<=*BQuant_89_param1J    *BQuant_89_param2J   A*BQuant_90_param1J    *BQuant_90_param2J   A*BQuant_91_param1J    *BQuant_91_param2J   A*BQuant_92_param1J    *BQuant_92_param2J   A*BQuant_93_param1J    *BQuant_93_param2J   A*BQuant_94_param0Jq>=*BQuant_94_param1J    *BQuant_94_param2J   A*BQuant_95_param1J    *BQuant_95_param2J   A*BQuant_96_param1J    *BQuant_96_param2J   A*BTrunc_0_param1J    *BTrunc_0_param3Jˆ™³<*BTrunc_0_param4J   A*BTrunc_1_param1J    *BTrunc_1_param3Jˆ™³<*BTrunc_1_param4J   A*BTrunc_2_param1J    *BTrunc_2_param3Jˆ™³<*BTrunc_2_param4J   A*BTrunc_3_param1J    *BTrunc_3_param3Jˆ™³<*BTrunc_3_param4J   A*BQuant_97_param1J    *BQuant_97_param2J   A*BQuant_98_param1J    *BQuant_98_param2J   A*BQuant_99_param1J    *BQuant_99_param2J   A*BQuant_100_param1J    *BQuant_100_param2J   A*BQuant_101_param0J¥>=*BQuant_101_param1J    *BQuant_101_param2J   A*BQuant_102_param0J¥>=*BQuant_102_param1J    *BQuant_102_param2J   A*BQuant_103_param0J¥>=*BQuant_103_param1J    *BQuant_103_param2J   A*BQuant_104_param0J¥>=*BQuant_104_param1J    *BQuant_104_param2J   A*BQuant_105_param1J    *BQuant_105_param2J   A*BQuant_106_param1J    *BQuant_106_param2J   A*BQuant_107_param1J    *BQuant_107_param2J   A*BQuant_108_param0JŸˆ9=*BQuant_108_param1J    *BQuant_108_param2J   A*BQuant_109_param1J    *BQuant_109_param2J   A*BQuant_110_param1J    *BQuant_110_param2J   A*BQuant_111_param1J    *BQuant_111_param2J   A*BQuant_112_param1J    *BQuant_112_param2J   A*BQuant_113_param1J    *BQuant_113_param2J   A*BTrunc_0_param2J  ˜A*BTrunc_1_param2J  ˆA*BTrunc_2_param2J  pA*BTrunc_3_param2J  PAZ%
+;*BQuant_67_param0J’V<*BQuant_13_param1JåôÁ:*BQuant_65_param0Jgv?=*BQuant_69_param0J4 =*BQuant_14_param1J0å:*BQuant_70_param0JV•*<*BQuant_15_param1JùÔ:*BQuant_71_param0J¤ËR<*BQuant_16_param1Jîˆä:*BQuant_72_param0J¨T<*BQuant_17_param1JÛª©:*BQuant_74_param0J!Ó"<*BQuant_18_param1J»óş:*BQuant_75_param0J1õ4<*BQuant_19_param1J9 ¿:*BQuant_73_param0J23>=*BQuant_77_param0J+ÔÁ<*BQuant_20_param1J	í­:*BQuant_79_param0J–¾<*BQuant_21_param1J²-;*BQuant_80_param0Jœ8-<*BQuant_22_param1J¿óª:*BQuant_78_param0Jò>=*BQuant_82_param0JèiÚ<*BQuant_23_param1J‚²:*BQuant_83_param0J “<*BQuant_24_param1JCÜ;*BQuant_84_param0JÒG<*BQuant_25_param1J\¶:*BQuant_85_param0J.Şƒ<*BQuant_26_param1Jà¹¡:*BQuant_87_param0JìÅ<*BQuant_27_param1J5‡Ü:*BQuant_88_param0J ÊT<*BQuant_28_param1JÁ:*BQuant_86_param0J<í<=*BQuant_90_param0Jí©š<*BQuant_29_param1JÂºã:*BQuant_92_param0J¸Ô<*BQuant_30_param1Jï3;*BQuant_93_param0J•ÛP<*BQuant_31_param1J¼ˆ§:*BQuant_91_param0Jq>=*BQuant_95_param0Jˆ™³<*BTrunc_0_param0Jˆ™37*BTrunc_0_param2J  ˜A*BQuant_32_param1J¾ûË:*BQuant_97_param0JÎOb;*BQuant_33_param1J<*BQuant_96_param0J¥>=*BTrunc_1_param0Jˆ™38*BTrunc_1_param2J  ˆA*BQuant_34_param1J×=Å:*BQuant_98_param0J=´³;*BTrunc_2_param0Jˆ™39*BTrunc_2_param2J  pA*BQuant_36_param1JqiÄ:*BQuant_99_param0JJÚÔ;*BTrunc_3_param0Jˆ™3:*BTrunc_3_param2J  PA*BQuant_38_param1JG¥:*BQuant_100_param0Jèı<*BQuant_105_param0J‚è®<*BQuant_40_param1J'º;*BQuant_106_param0J›¢<*BQuant_42_param1JßÛÈ:*BQuant_107_param0J-´p<*BQuant_43_param1J¯Q[;*BQuant_44_param1J
+ş:*BQuant_56_param0JŸˆ9=*BQuant_109_param0Jİ¬^<*BQuant_45_param1JS‘;*BQuant_110_param0J÷L<*BQuant_46_param1JVÑ$;*BQuant_111_param0JÓj<*BQuant_47_param1J¢Qİ:*BQuant_112_param0J¥Tİ;*BQuant_48_param1J÷'?;*BQuant_113_param0JµÉ–<*BQuant_49_param1JŠà;*BQuant_1_param2J    *BQuant_1_param3J   A*BQuant_2_param2J    *BQuant_2_param3J   A*BQuant_3_param2J    *BQuant_3_param3J   A*BQuant_4_param2J    *BQuant_4_param3J   A*BQuant_5_param2J    *BQuant_5_param3J   A*BQuant_6_param2J    *BQuant_6_param3J   A*BQuant_7_param2J    *BQuant_7_param3J   A*BQuant_8_param2J    *BQuant_8_param3J   A*BQuant_9_param2J    *BQuant_9_param3J   A*BQuant_10_param2J    *BQuant_10_param3J   A*BQuant_11_param2J    *BQuant_11_param3J   A*BQuant_12_param2J    *BQuant_12_param3J   A*BQuant_13_param2J    *BQuant_13_param3J   A*BQuant_14_param2J    *BQuant_14_param3J   A*BQuant_15_param2J    *BQuant_15_param3J   A*BQuant_16_param2J    *BQuant_16_param3J   A*BQuant_17_param2J    *BQuant_17_param3J   A*BQuant_18_param2J    *BQuant_18_param3J   A*BQuant_19_param2J    *BQuant_19_param3J   A*BQuant_20_param2J    *BQuant_20_param3J   A*BQuant_21_param2J    *BQuant_21_param3J   A*BQuant_22_param2J    *BQuant_22_param3J   A*BQuant_23_param2J    *BQuant_23_param3J   A*BQuant_24_param2J    *BQuant_24_param3J   A*BQuant_25_param2J    *BQuant_25_param3J   A*BQuant_26_param2J    *BQuant_26_param3J   A*BQuant_27_param2J    *BQuant_27_param3J   A*BQuant_28_param2J    *BQuant_28_param3J   A*BQuant_29_param2J    *BQuant_29_param3J   A*BQuant_30_param2J    *BQuant_30_param3J   A*BQuant_31_param2J    *BQuant_31_param3J   A*BQuant_32_param2J    *BQuant_32_param3J   A*BQuant_33_param2J    *BQuant_33_param3J   A*BQuant_34_param2J    *BQuant_34_param3J   A*BQuant_35_param1J<*BQuant_35_param2J    *BQuant_35_param3J   A*BQuant_36_param2J    *BQuant_36_param3J   A*BQuant_37_param1J<*BQuant_37_param2J    *BQuant_37_param3J   A*BQuant_38_param2J    *BQuant_38_param3J   A*BQuant_39_param1J<*BQuant_39_param2J    *BQuant_39_param3J   A*BQuant_40_param2J    *BQuant_40_param3J   A*BQuant_41_param1J<*BQuant_41_param2J    *BQuant_41_param3J   A*BQuant_42_param2J    *BQuant_42_param3J   A*BQuant_43_param2J    *BQuant_43_param3J   A*BQuant_44_param2J    *BQuant_44_param3J   A*BQuant_45_param2J    *BQuant_45_param3J   A*BQuant_46_param2J    *BQuant_46_param3J   A*BQuant_47_param2J    *BQuant_47_param3J   A*BQuant_48_param2J    *BQuant_48_param3J   A*BQuant_49_param2J    *BQuant_49_param3J   A*BQuant_50_param1J    *BQuant_50_param2J   A*BQuant_51_param1J    *BQuant_51_param2J   A*BQuant_52_param1J    *BQuant_52_param2J   A*BQuant_53_param1J    *BQuant_53_param2J   A*BQuant_54_param1J    *BQuant_54_param2J   A*BQuant_55_param1J    *BQuant_55_param2J   A*BQuant_56_param1J    *BQuant_56_param2J   A*BQuant_57_param1J    *BQuant_57_param2J   A*BQuant_58_param1J    *BQuant_58_param2J   A*BQuant_59_param1J    *BQuant_59_param2J   A*BQuant_60_param1J    *BQuant_60_param2J   A*BQuant_61_param1J    *BQuant_61_param2J   A*BQuant_62_param1J    *BQuant_62_param2J   A*BQuant_63_param0J1º>=*BQuant_63_param1J    *BQuant_63_param2J   A*BQuant_64_param1J    *BQuant_64_param2J   A*BQuant_65_param1J    *BQuant_65_param2J   A*BQuant_66_param1J    *BQuant_66_param2J   A*BQuant_67_param1J    *BQuant_67_param2J   A*BQuant_68_param0Jgv?=*BQuant_68_param1J    *BQuant_68_param2J   A*BQuant_69_param1J    *BQuant_69_param2J   A*BQuant_70_param1J    *BQuant_70_param2J   A*BQuant_71_param1J    *BQuant_71_param2J   A*BQuant_72_param1J    *BQuant_72_param2J   A*BQuant_73_param1J    *BQuant_73_param2J   A*BQuant_74_param1J    *BQuant_74_param2J   A*BQuant_75_param1J    *BQuant_75_param2J   A*BQuant_76_param0J23>=*BQuant_76_param1J    *BQuant_76_param2J   A*BQuant_77_param1J    *BQuant_77_param2J   A*BQuant_78_param1J    *BQuant_78_param2J   A*BQuant_79_param1J    *BQuant_79_param2J   A*BQuant_80_param1J    *BQuant_80_param2J   A*BQuant_81_param0Jò>=*BQuant_81_param1J    *BQuant_81_param2J   A*BQuant_82_param1J    *BQuant_82_param2J   A*BQuant_83_param1J    *BQuant_83_param2J   A*BQuant_84_param1J    *BQuant_84_param2J   A*BQuant_85_param1J    *BQuant_85_param2J   A*BQuant_86_param1J    *BQuant_86_param2J   A*BQuant_87_param1J    *BQuant_87_param2J   A*BQuant_88_param1J    *BQuant_88_param2J   A*BQuant_89_param0J<í<=*BQuant_89_param1J    *BQuant_89_param2J   A*BQuant_90_param1J    *BQuant_90_param2J   A*BQuant_91_param1J    *BQuant_91_param2J   A*BQuant_92_param1J    *BQuant_92_param2J   A*BQuant_93_param1J    *BQuant_93_param2J   A*BQuant_94_param0Jq>=*BQuant_94_param1J    *BQuant_94_param2J   A*BQuant_95_param1J    *BQuant_95_param2J   A*BQuant_96_param1J    *BQuant_96_param2J   A*BTrunc_0_param1J    *BTrunc_0_param3Jˆ™³<*BTrunc_0_param4J   A*BTrunc_1_param1J    *BTrunc_1_param3Jˆ™³<*BTrunc_1_param4J   A*BTrunc_2_param1J    *BTrunc_2_param3Jˆ™³<*BTrunc_2_param4J   A*BTrunc_3_param1J    *BTrunc_3_param3Jˆ™³<*BTrunc_3_param4J   A*BQuant_97_param1J    *BQuant_97_param2J   A*BQuant_98_param1J    *BQuant_98_param2J   A*BQuant_99_param1J    *BQuant_99_param2J   A*BQuant_100_param1J    *BQuant_100_param2J   A*BQuant_101_param0J¥>=*BQuant_101_param1J    *BQuant_101_param2J   A*BQuant_102_param0J¥>=*BQuant_102_param1J    *BQuant_102_param2J   A*BQuant_103_param0J¥>=*BQuant_103_param1J    *BQuant_103_param2J   A*BQuant_104_param0J¥>=*BQuant_104_param1J    *BQuant_104_param2J   A*BQuant_105_param1J    *BQuant_105_param2J   A*BQuant_106_param1J    *BQuant_106_param2J   A*BQuant_107_param1J    *BQuant_107_param2J   A*BQuant_108_param0JŸˆ9=*BQuant_108_param1J    *BQuant_108_param2J   A*BQuant_109_param1J    *BQuant_109_param2J   A*BQuant_110_param1J    *BQuant_110_param2J   A*BQuant_111_param1J    *BQuant_111_param2J   A*BQuant_112_param1J    *BQuant_112_param2J   A*BQuant_113_param1J    *BQuant_113_param2J   AZ%
 	global_in
 
 
@@ -17782,6 +17796,8 @@ global_out
 Quant_95_param0
  j
 Trunc_0_param0
+ j
+Trunc_0_param2
  j
 Quant_32_param1
  j
@@ -17792,18 +17808,24 @@ global_out
 Quant_96_param0
  j
 Trunc_1_param0
+ j
+Trunc_1_param2
  j
 Quant_34_param1
  j
 Quant_98_param0
  j
 Trunc_2_param0
+ j
+Trunc_2_param2
  j
 Quant_36_param1
  j
 Quant_99_param0
  j
 Trunc_3_param0
+ j
+Trunc_3_param2
  j
 Quant_38_param1
  j
@@ -18422,8 +18444,8 @@ Add_5_out0
 
 €
  
-@j3
-GlobalAveragePool_0_out0
+@j-
+AveragePool_0_out0
 
 
 €
@@ -18453,7 +18475,7 @@ Add_5_out0
  
  
 @j-
-AveragePool_0_out0
+AveragePool_1_out0
 
 
 €
@@ -18483,7 +18505,7 @@ Add_5_out0
  
  
 @j-
-AveragePool_1_out0
+AveragePool_2_out0
 
 
 €
@@ -18513,7 +18535,7 @@ Add_5_out0
  
  
 @j-
-AveragePool_2_out0
+AveragePool_3_out0
 
 
 €
@@ -20115,14 +20137,6 @@ Add_6_out0
 Quant_113_param1
  j
 Quant_113_param2
- j
-Trunc_0_param2
- j
-Trunc_1_param2
- j
-Trunc_2_param2
- j
-Trunc_3_param2
  r*
 Quant_1_param2
 finn_datatypeFLOAT32r*

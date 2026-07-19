@@ -5,8 +5,8 @@ The following changes to make it compatible with quantization and translation to
 --> The weights are quantized to 8 bits using per-tensor quantization with a floating-point scale.
 --> Added "qat" mode to the model, which allows for quantization-aware training and export to ONNX and FINN. This mode enables the final upsampling layer to be used.
 --> Added "finn" mode to the model, which is used for QONNX export for FINN framework. In this mode, the input preprocessing is done in the model, since FINN expects uint8 inputs.
---> F.interpolate is replaced by qnn.QuantConvTranspose2d with frozen weights of torch.ones().
---> The pooling layers are quantized using qnn.TruncAdaptiveAvgPool2d. One for each pool size since the output size is a parameter in the quantized version.
+--> F.interpolate is replaced by depthwise qnn.QuantConvTranspose2d with frozen weights of torch.ones().
+--> The adaptive average pooling layers are replaced by qnn.TruncAvgPool2d with pre-calculated kernel sizes.
 --> Pooling operations are quantized to avoid issues when translating the model to ONNX and then to FINN.
 --> The last upsampling layer is removed to avoid a large upsampling factor with 'nearest' mode, which can comprimise severly the accuracy of the model.
   obs: The last upsampling layer can be done in external post-processing step, with the output of the model being passed to a CPU or small GPU.
@@ -23,9 +23,9 @@ from brevitas.inject.enum import *
 from config import BIT_WIDTH, IM_SIZE
 
 
-def get_upsample_callable(channels, scale_factor):
+def get_upsample_callable(channels: int, scale_factor: int | tuple[int, int]) -> qnn.QuantConvTranspose2d:
     """
-    Returns a callable that performs upsampling using a quantized transposed convolution with frozen weights of torch.ones(). This is used to replace F.interpolate in the model, which is not supported by FINN.
+    Returns a callable that performs upsampling using a quantized depthwise transposed convolution with frozen weights of torch.ones(). This is used to replace F.interpolate in the model, which is not supported by FINN.
     """
     return qnn.QuantConvTranspose2d(channels, channels, scale_factor,
                                     stride=scale_factor,
@@ -174,7 +174,7 @@ class PyramidPooling(nn.Module):
     """
     Pyramid pooling module
     --> The pool sizes were changed from [1, 2, 3, 6] to [1, 2, 4, 8] since for onnx export the img size needs to be divisible by the pool size (in this case 32 and 64).
-    --> The original model uses adaptive average pooling, which can be replaced by a quantized version of it.
+    --> The original model uses adaptive average pooling, which can be replaced by a quantized version of standard Average Pooling with fixes pre defined kernel sizes.
     --> The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones() to avoid issues when translating the model to ONNX and then to FINN, since onnx runtime outputs an error when a Resize block parameter is empty.
     """
 
@@ -189,27 +189,34 @@ class PyramidPooling(nn.Module):
 
         self.pool_output_sizes = [1, 2, 4, 8]  # Pool sizes for the pyramid pooling layers
 
+        # Defining the output size for the PiramidPooling class
+        tensor_size = tuple(im_size // 32 for im_size in IM_SIZE) # The original model uses a fixed input size of 1024x2048, which is downsampled by a factor of 32 before the PyramidPooling.
+
+        # Defining the kernel sizes for the pooling layers, which are also the same as the scale factor for upsampling layers.
+        # The original model uses adaptive average pooling, which can be replaced by a quantized version of it.
+        self.kernel_sizes = []
+        for pool_out_size in self.pool_output_sizes:
+            self.kernel_sizes.append(tuple(size // pool_out_size for size in tensor_size))
+
         # Added quantization for the pooling layers. The original model uses adaptive average pooling, which can be replaced by a quantized version of it.
         # Necessary to create new instance for each pool size since the output size is a parameter in the quantized version.
-        self.pool1 = qnn.TruncAdaptiveAvgPool2d(output_size=self.pool_output_sizes[0], return_quant_tensor=True)
-        self.pool2 = qnn.TruncAdaptiveAvgPool2d(output_size=self.pool_output_sizes[1], return_quant_tensor=True)
-        self.pool4 = qnn.TruncAdaptiveAvgPool2d(output_size=self.pool_output_sizes[2], return_quant_tensor=True)
-        self.pool8 = qnn.TruncAdaptiveAvgPool2d(output_size=self.pool_output_sizes[3], return_quant_tensor=True)
+        self.pool1 = qnn.TruncAvgPool2d(self.kernel_sizes[0], return_quant_tensor=True)
+        self.pool2 = qnn.TruncAvgPool2d(self.kernel_sizes[1], return_quant_tensor=True)
+        self.pool4 = qnn.TruncAvgPool2d(self.kernel_sizes[2], return_quant_tensor=True)
+        self.pool8 = qnn.TruncAvgPool2d(self.kernel_sizes[3], return_quant_tensor=True)
 
         ## -- BEGIN OF QUANTIZED UPSAMPLE DEFINITION -- ##
         '''
         Added quantization for the upsampled features. The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones()
         This modification is to avoid issues when translating the model to ONNX and then to FINN, since onnx runtime outputs an error when a Resize block parameter is empty.
         '''
-        
-        # Defining the output size for the PiramidPooling class
-        ff_out_size = tuple(im_size // 32 for im_size in IM_SIZE) # The original model uses a fixed input size of 1024x2048, which is downsampled by a factor of 32 before the PyramidPooling.
 
         # Defining the upsample layers for each pooling layer. The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones().
-        self.upsample1 = get_upsample_callable(inter_channels, tuple(size // self.pool_output_sizes[0] for size in ff_out_size))
-        self.upsample2 = get_upsample_callable(inter_channels, tuple(size // self.pool_output_sizes[1] for size in ff_out_size))
-        self.upsample4 = get_upsample_callable(inter_channels, tuple(size // self.pool_output_sizes[2] for size in ff_out_size))
-        self.upsample8 = get_upsample_callable(inter_channels, tuple(size // self.pool_output_sizes[3] for size in ff_out_size))
+        # The scale factors are the same as the kernel sizes for the pooling layers, since the output size of the pooling layers is the same as the input size of the upsample layers.
+        self.upsample1 = get_upsample_callable(inter_channels, self.kernel_sizes[0])
+        self.upsample2 = get_upsample_callable(inter_channels, self.kernel_sizes[1])
+        self.upsample4 = get_upsample_callable(inter_channels, self.kernel_sizes[2])
+        self.upsample8 = get_upsample_callable(inter_channels, self.kernel_sizes[3])
 
         # Initialize the weights to 1.0 and freeze them to mimic the behavior of F.interpolate with mode='nearest'.
         nn.init.constant_(self.upsample1.weight, 1.0)
@@ -227,9 +234,11 @@ class PyramidPooling(nn.Module):
 
         ## -- END OF QUANTIZED UPSAMPLE DEFINITION -- ##
 
-        self.shared_act = qnn.QuantIdentity(act_quant=ParameterizedActQuant,
-                                            bit_width=BIT_WIDTH,
-                                            return_quant_tensor=True)
+        #self.shared_act = qnn.QuantIdentity(act_quant=ParameterizedActQuant,
+        #                                    bit_width=BIT_WIDTH,
+        #                                    return_quant_tensor=True)
+
+        self.concat = qnn.QuantCat(return_quant_tensor=True)
 
         self.quant_out = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
                                            bit_width=BIT_WIDTH,
@@ -237,16 +246,15 @@ class PyramidPooling(nn.Module):
 
     def forward(self, x):
 
-        # Original model operations
-        size = x.size()[2:]
         feat1 = self.shared_act(self.upsample1(self.conv1(self.pool1(x))))
         feat2 = self.shared_act(self.upsample2(self.conv2(self.pool2(x))))
         feat3 = self.shared_act(self.upsample4(self.conv3(self.pool4(x))))
         feat4 = self.shared_act(self.upsample8(self.conv4(self.pool8(x))))
 
-        x = self.shared_act(x)
-        x = torch.cat([x, feat1, feat2, feat3, feat4], dim=1)
-        x = self.quant_out(x)
+        #x = self.shared_act(x)
+        #x = torch.cat([x, feat1, feat2, feat3, feat4], dim=1)
+        x = self.concat([x, feat1, feat2, feat3, feat4])
+        #x = self.quant_out(x)
         x = self.out(x)
         return x
 
