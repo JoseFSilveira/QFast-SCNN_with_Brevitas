@@ -6,8 +6,8 @@ The following changes to make it compatible with quantization and translation to
 --> Added "qat" mode to the model, which allows for quantization-aware training and export to ONNX and FINN. This mode enables the final upsampling layer to be used.
 --> Added "finn" mode to the model, which is used for QONNX export for FINN framework. In this mode, the input preprocessing is done in the model, since FINN expects uint8 inputs.
 --> F.interpolate is replaced by depthwise qnn.QuantConvTranspose2d with frozen weights of torch.ones().
---> The adaptive average pooling layers are replaced by qnn.TruncAvgPool2d with pre-calculated kernel sizes.
---> Pooling operations are quantized to avoid issues when translating the model to ONNX and then to FINN.
+--> The adaptive average pooling layers are replaced by nn.AvgPool2d with pre-calculated kernel sizes.
+--> torch.cat() was replaced by a modification of Brevitas qnn.QuantCat to allow for concatenation of QuantTensors, since the QuantTensor class does not have a cat() method anymore (Brevitas Bug).
 --> The last upsampling layer is removed to avoid a large upsampling factor with 'nearest' mode, which can comprimise severly the accuracy of the model.
   obs: The last upsampling layer can be done in external post-processing step, with the output of the model being passed to a CPU or small GPU.
 '''
@@ -20,7 +20,7 @@ from brevitas.quant.scaled_int import Int8WeightPerTensorFloat, Uint8ActPerTenso
 from brevitas.quant_tensor import QuantTensor
 from brevitas.inject.enum import *
 
-from config import BIT_WIDTH, IM_SIZE
+from config import BIT_WIDTH, IM_SIZE, CROP_SIZE
 
 
 def get_upsample_callable(channels: int, scale_factor: int | tuple[int, int]) -> qnn.QuantConvTranspose2d:
@@ -46,6 +46,26 @@ class ParameterizedActQuant(Int8ActPerTensorFloat):
     min_val = -6.0
 
 
+class CustomQuantCat(qnn.QuantCat):
+    '''
+    A modification of the original qnn.QuantCat replacing QuantTensor.cat() with torch.cat(), since the QuantTensor does not have cat() method anymore (Brevitas Bug).
+    '''
+    def forward(self,
+                tensor_list: list[torch.Tensor] | list[QuantTensor],
+                dim: int = 1) -> torch.Tensor | QuantTensor:
+        quant_tensor_list = [self.unpack_input(t) for t in tensor_list]
+        # shortcut execution through the export impl during export
+        if self.export_mode:
+            out = self.export_handler([qt.value for qt in quant_tensor_list])
+            self._set_global_is_quant_layer(False)
+            return out
+        quant_tensor_list = [self.input_quant(qt) for qt in quant_tensor_list]
+        # trigger an assert if scale factors and bit widths are None or different
+        output = torch.cat(quant_tensor_list, dim=dim)
+        quant_output = self.output_quant(output)
+        return self.pack_output(quant_output)
+
+
 class QFastSCNN(nn.Module):
 
     def __init__(self, num_classes, mode="raw", **kwargs):
@@ -58,7 +78,7 @@ class QFastSCNN(nn.Module):
 
         self.inp_quant = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat, return_quant_tensor=True)
         self.learning_to_downsample = LearningToDownsample(32, 48, 64)
-        self.global_feature_extractor = GlobalFeatureExtractor(64, [64, 96, 128], 128, 6, [3, 3, 3])
+        self.global_feature_extractor = GlobalFeatureExtractor(64, [64, 96, 128], 128, 6, [3, 3, 3], mode=mode)
         self.feature_fusion = FeatureFusionModule(64, 128, 128)
         self.classifier = Classifer(128, num_classes)
 
@@ -73,7 +93,6 @@ class QFastSCNN(nn.Module):
             finn_B = (mean / std)
             self.register_buffer('finn_A', finn_A)
             self.register_buffer('finn_B', finn_B)
-
 
     def forward(self, x):
         if self.mode == "qat":
@@ -178,7 +197,7 @@ class PyramidPooling(nn.Module):
     --> The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones() to avoid issues when translating the model to ONNX and then to FINN, since onnx runtime outputs an error when a Resize block parameter is empty.
     """
 
-    def __init__(self, in_channels, out_channels, **kwargs):
+    def __init__(self, in_channels, out_channels, mode='raw', **kwargs):
         super(PyramidPooling, self).__init__()
         inter_channels = int(in_channels / 4)
         self.conv1 = _ConvBNReLU(in_channels, inter_channels, 1, **kwargs)
@@ -187,74 +206,92 @@ class PyramidPooling(nn.Module):
         self.conv4 = _ConvBNReLU(in_channels, inter_channels, 1, **kwargs)
         self.out = _ConvBNReLU(in_channels * 2, out_channels, 1)
 
+        self.mode = mode
         self.pool_output_sizes = [1, 2, 4, 8]  # Pool sizes for the pyramid pooling layers
 
+        ''' BEGIN OF TRAIN PARAMETERS DEFINITION '''
+
         # Defining the output size for the PiramidPooling class
-        tensor_size = tuple(im_size // 32 for im_size in IM_SIZE) # The original model uses a fixed input size of 1024x2048, which is downsampled by a factor of 32 before the PyramidPooling.
+        self.tensor_size_train = tuple(im_size // 32 for im_size in CROP_SIZE) # During Training the original model uses a fixed input size of 768x768, which is downsampled by a factor of 32 before the PyramidPooling.
 
         # Defining the kernel sizes for the pooling layers, which are also the same as the scale factor for upsampling layers.
         # The original model uses adaptive average pooling, which can be replaced by a quantized version of it.
-        self.kernel_sizes = []
+        self.kernel_sizes_train = []
         for pool_out_size in self.pool_output_sizes:
-            self.kernel_sizes.append(tuple(size // pool_out_size for size in tensor_size))
+            self.kernel_sizes_train.append(tuple(size // pool_out_size for size in self.tensor_size_train))
 
-        # Added quantization for the pooling layers. The original model uses adaptive average pooling, which can be replaced by a quantized version of it.
+        # The original model uses adaptive average pooling, which can be replaced by a standard Average Pooling with pre-defined kernel sizes.
         # Necessary to create new instance for each pool size since the output size is a parameter in the quantized version.
-        self.pool1 = qnn.TruncAvgPool2d(self.kernel_sizes[0], return_quant_tensor=True)
-        self.pool2 = qnn.TruncAvgPool2d(self.kernel_sizes[1], return_quant_tensor=True)
-        self.pool4 = qnn.TruncAvgPool2d(self.kernel_sizes[2], return_quant_tensor=True)
-        self.pool8 = qnn.TruncAvgPool2d(self.kernel_sizes[3], return_quant_tensor=True)
+        self.pool1_train = nn.AvgPool2d(self.kernel_sizes_train[0])
+        self.pool2_train = nn.AvgPool2d(self.kernel_sizes_train[1])
+        self.pool4_train = nn.AvgPool2d(self.kernel_sizes_train[2])
+        self.pool8_train = nn.AvgPool2d(self.kernel_sizes_train[3])
 
-        ## -- BEGIN OF QUANTIZED UPSAMPLE DEFINITION -- ##
-        '''
-        Added quantization for the upsampled features. The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones()
-        This modification is to avoid issues when translating the model to ONNX and then to FINN, since onnx runtime outputs an error when a Resize block parameter is empty.
-        '''
-
+        # Added quantization for the upsampled features. The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones()
+        # This modification is to avoid issues when translating the model to ONNX and then to FINN, since onnx runtime outputs an error when a Resize block parameter is empty.
+        
         # Defining the upsample layers for each pooling layer. The original model uses F.interpolate, which is being replaced by a QuantConvTranspose2d with frozen weights of torch.ones().
         # The scale factors are the same as the kernel sizes for the pooling layers, since the output size of the pooling layers is the same as the input size of the upsample layers.
-        self.upsample1 = get_upsample_callable(inter_channels, self.kernel_sizes[0])
-        self.upsample2 = get_upsample_callable(inter_channels, self.kernel_sizes[1])
-        self.upsample4 = get_upsample_callable(inter_channels, self.kernel_sizes[2])
-        self.upsample8 = get_upsample_callable(inter_channels, self.kernel_sizes[3])
+        self.upsample1_train = get_upsample_callable(inter_channels, self.kernel_sizes_train[0])
+        self.upsample2_train = get_upsample_callable(inter_channels, self.kernel_sizes_train[1])
+        self.upsample4_train = get_upsample_callable(inter_channels, self.kernel_sizes_train[2])
+        self.upsample8_train = get_upsample_callable(inter_channels, self.kernel_sizes_train[3])
 
         # Initialize the weights to 1.0 and freeze them to mimic the behavior of F.interpolate with mode='nearest'.
-        nn.init.constant_(self.upsample1.weight, 1.0)
-        for param in self.upsample1.parameters():
-            param.requires_grad = False
-        nn.init.constant_(self.upsample2.weight, 1.0)
-        for param in self.upsample2.parameters():
-            param.requires_grad = False
-        nn.init.constant_(self.upsample4.weight, 1.0)
-        for param in self.upsample4.parameters():
-            param.requires_grad = False
-        nn.init.constant_(self.upsample8.weight, 1.0)
-        for param in self.upsample8.parameters():
-            param.requires_grad = False
+        for op in [self.upsample1_train, self.upsample2_train, self.upsample4_train, self.upsample8_train]:
+            nn.init.constant_(op.weight, 1.0)
+            for param in op.parameters():
+                param.requires_grad = False
 
-        ## -- END OF QUANTIZED UPSAMPLE DEFINITION -- ##
+        ''' END OF TRAIN PARAMETERS DEFINITION '''
+        
+        ''' BEGIN OF EVAL PARAMETERS DEFINITION '''
+        
+        self.tensor_size_eval = tuple(im_size // 32 for im_size in IM_SIZE) # During Eval the original model uses a fixed input size of 1024x2048, which is downsampled by a factor of 32 before the PyramidPooling.
 
-        #self.shared_act = qnn.QuantIdentity(act_quant=ParameterizedActQuant,
-        #                                    bit_width=BIT_WIDTH,
-        #                                    return_quant_tensor=True)
+        self.kernel_sizes_eval = []
+        for pool_out_size in self.pool_output_sizes:
+            self.kernel_sizes_eval.append(tuple(size // pool_out_size for size in self.tensor_size_eval))
 
-        self.concat = qnn.QuantCat(return_quant_tensor=True)
+        self.pool1_eval = nn.AvgPool2d(self.kernel_sizes_eval[0])
+        self.pool2_eval = nn.AvgPool2d(self.kernel_sizes_eval[1])
+        self.pool4_eval = nn.AvgPool2d(self.kernel_sizes_eval[2])
+        self.pool8_eval = nn.AvgPool2d(self.kernel_sizes_eval[3])
 
-        self.quant_out = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
+        self.upsample1_eval = get_upsample_callable(inter_channels, self.kernel_sizes_eval[0])
+        self.upsample2_eval = get_upsample_callable(inter_channels, self.kernel_sizes_eval[1])
+        self.upsample4_eval = get_upsample_callable(inter_channels, self.kernel_sizes_eval[2])
+        self.upsample8_eval = get_upsample_callable(inter_channels, self.kernel_sizes_eval[3])
+
+        for op in [self.upsample1_eval, self.upsample2_eval, self.upsample4_eval, self.upsample8_eval]:
+            nn.init.constant_(op.weight, 1.0)
+            for param in op.parameters():
+                param.requires_grad = False
+
+        ''' END OF EVAL PARAMETERS DEFINITION '''
+    
+        self.concat = CustomQuantCat(return_quant_tensor=True)
+
+        self.quant_tensor = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
                                            bit_width=BIT_WIDTH,
                                            return_quant_tensor=True)
 
     def forward(self, x):
 
-        feat1 = self.shared_act(self.upsample1(self.conv1(self.pool1(x))))
-        feat2 = self.shared_act(self.upsample2(self.conv2(self.pool2(x))))
-        feat3 = self.shared_act(self.upsample4(self.conv3(self.pool4(x))))
-        feat4 = self.shared_act(self.upsample8(self.conv4(self.pool8(x))))
+        if self.training:
+            # Use CROP_SIZE for training [768x768]
+            feat1 = self.upsample1_train(self.conv1(self.quant_tensor(self.pool1_train(x))))
+            feat2 = self.upsample2_train(self.conv2(self.quant_tensor(self.pool2_train(x))))
+            feat3 = self.upsample4_train(self.conv3(self.quant_tensor(self.pool4_train(x))))
+            feat4 = self.upsample8_train(self.conv4(self.quant_tensor(self.pool8_train(x))))
+        else:
+            # Use IM_SIZE for evaluation [1024x2048]
+            feat1 = self.upsample1_eval(self.conv1(self.quant_tensor(self.pool1_eval(x))))
+            feat2 = self.upsample2_eval(self.conv2(self.quant_tensor(self.pool2_eval(x))))
+            feat3 = self.upsample4_eval(self.conv3(self.quant_tensor(self.pool4_eval(x))))
+            feat4 = self.upsample8_eval(self.conv4(self.quant_tensor(self.pool8_eval(x))))
 
-        #x = self.shared_act(x)
-        #x = torch.cat([x, feat1, feat2, feat3, feat4], dim=1)
         x = self.concat([x, feat1, feat2, feat3, feat4])
-        #x = self.quant_out(x)
         x = self.out(x)
         return x
 
@@ -279,12 +316,12 @@ class GlobalFeatureExtractor(nn.Module):
     """Global feature extractor module"""
 
     def __init__(self, in_channels=64, block_channels=(64, 96, 128),
-                 out_channels=128, t=6, num_blocks=(3, 3, 3), **kwargs):
+                 out_channels=128, t=6, num_blocks=(3, 3, 3), mode='raw', **kwargs):
         super(GlobalFeatureExtractor, self).__init__()
         self.bottleneck1 = self._make_layer(LinearBottleneck, in_channels, block_channels[0], num_blocks[0], t, 2)
         self.bottleneck2 = self._make_layer(LinearBottleneck, block_channels[0], block_channels[1], num_blocks[1], t, 2)
         self.bottleneck3 = self._make_layer(LinearBottleneck, block_channels[1], block_channels[2], num_blocks[2], t, 1)
-        self.ppm = PyramidPooling(block_channels[2], out_channels)
+        self.ppm = PyramidPooling(block_channels[2], out_channels, mode=mode)
 
     def _make_layer(self, block, inplanes, planes, blocks, t=6, stride=1):
         layers = []
