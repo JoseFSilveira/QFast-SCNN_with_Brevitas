@@ -8,6 +8,7 @@ The following changes to make it compatible with quantization and translation to
 --> F.interpolate is replaced by depthwise qnn.QuantConvTranspose2d with frozen weights of torch.ones().
 --> The adaptive average pooling layers are replaced by nn.AvgPool2d with pre-calculated kernel sizes.
 --> torch.cat() was replaced by a modification of Brevitas qnn.QuantCat to allow for concatenation of QuantTensors, since the QuantTensor class does not have a cat() method anymore (Brevitas Bug).
+--> Standart Add operations were replaced by Brevitas qnn.QuantEltwiseAdd to allow for addition of QuantTensors.
 --> The last upsampling layer is removed to avoid a large upsampling factor with 'nearest' mode, which can comprimise severly the accuracy of the model.
   obs: The last upsampling layer can be done in external post-processing step, with the output of the model being passed to a CPU or small GPU.
 '''
@@ -35,15 +36,6 @@ def get_upsample_callable(channels: int, scale_factor: int | tuple[int, int]) ->
                                     weight_bit_width=BIT_WIDTH,
                                     weight_quant=Int8WeightPerTensorFloat,
                                     return_quant_tensor=True)
-
-
-class ParameterizedActQuant(Int8ActPerTensorFloat):
-    '''
-    Custom parameterized activation quantizer that restricts the scaling implementation type to be a parameter, which is necessary for the quantization-aware training and export to ONNX and FINN.
-    '''
-    scaling_impl_type = ScalingImplType.PARAMETER
-    max_val = 6.0
-    min_val = -6.0
 
 
 class CustomQuantCat(qnn.QuantCat):
@@ -169,25 +161,19 @@ class LinearBottleneck(nn.Module):
             _DWConv(in_channels * t, in_channels * t, stride),
             # pw-linear
             qnn.QuantConv2d(in_channels * t, out_channels, 1, bias=False, weight_bit_width=BIT_WIDTH, weight_quant=Int8WeightPerTensorFloat, return_quant_tensor=True),
-            nn.BatchNorm2d(out_channels)
+            nn.BatchNorm2d(out_channels),
+            # quantize the output so it can be used in the skip connection addition
+            qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat, bit_width=BIT_WIDTH, return_quant_tensor=True)
         )
         
         # Added quantization for the skip connection
-        self.shared_quant = qnn.QuantIdentity(act_quant=ParameterizedActQuant,
-                                               bit_width=BIT_WIDTH,
-                                               return_quant_tensor=True)
-        
-        self.out_quant = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
-                                               bit_width=BIT_WIDTH,
-                                               return_quant_tensor=True)
+        self.add = qnn.QuantEltwiseAdd(return_quant_tensor=True)
         
     def forward(self, x):
         out = self.block(x)
         if self.use_shortcut:
-            x = self.shared_quant(x)
-            out = self.shared_quant(out)
-            out = x + out
-        return self.out_quant(out)
+            out = self.add(x, out)
+        return out
 
 class PyramidPooling(nn.Module):
     """
@@ -369,9 +355,7 @@ class FeatureFusionModule(nn.Module):
         self.relu = qnn.QuantReLU(inplace=True, bit_width=BIT_WIDTH, act_quant=Uint8ActPerTensorFloat, return_quant_tensor=True)
 
         # Added quantization for the skip connection
-        self.shared_quant = qnn.QuantIdentity(act_quant=ParameterizedActQuant,
-                                               bit_width=BIT_WIDTH,
-                                               return_quant_tensor=True)
+        self.add = qnn.QuantEltwiseAdd(return_quant_tensor=True)
                                            
 
     def forward(self, higher_res_feature, lower_res_feature):
@@ -382,11 +366,7 @@ class FeatureFusionModule(nn.Module):
 
         higher_res_feature = self.conv_higher_res(higher_res_feature)
 
-        # Added quantization for the features before the fusion
-        lower_res_feature = self.shared_quant(lower_res_feature)
-        higher_res_feature = self.shared_quant(higher_res_feature)
-
-        out = higher_res_feature + lower_res_feature
+        out = self.add(higher_res_feature, lower_res_feature)
         return self.relu(out)
 
 

@@ -88,7 +88,7 @@ class MoveMulPastAvgPool(Transformation):
 class MoveScalarLinearPastConcat(Transformation):
     """
     Modification of the FINN MoveLinearPastEltwiseAdd transformation.
-    Move Add and Mul operations past Concat operations.
+    Move Scalar Add and Scalar Mul operations past Concat operations.
     """
 
     def move_node(self, graph, model, n, prods, node_ind):
