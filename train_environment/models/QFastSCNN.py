@@ -167,7 +167,8 @@ class LinearBottleneck(nn.Module):
         )
         
         # Added quantization for the skip connection
-        self.add = qnn.QuantEltwiseAdd(return_quant_tensor=True)
+        if self.use_shortcut:
+            self.add = qnn.QuantEltwiseAdd(bit_width=BIT_WIDTH, return_quant_tensor=True)
         
     def forward(self, x):
         out = self.block(x)
@@ -256,7 +257,7 @@ class PyramidPooling(nn.Module):
 
         ''' END OF EVAL PARAMETERS DEFINITION '''
     
-        self.concat = CustomQuantCat(return_quant_tensor=True)
+        self.concat = CustomQuantCat(bit_width=BIT_WIDTH, return_quant_tensor=True)
 
         self.quant_tensor = qnn.QuantIdentity(act_quant=Int8ActPerTensorFloat,
                                            bit_width=BIT_WIDTH,
@@ -355,7 +356,7 @@ class FeatureFusionModule(nn.Module):
         self.relu = qnn.QuantReLU(inplace=True, bit_width=BIT_WIDTH, act_quant=Uint8ActPerTensorFloat, return_quant_tensor=True)
 
         # Added quantization for the skip connection
-        self.add = qnn.QuantEltwiseAdd(return_quant_tensor=True)
+        self.add = qnn.QuantEltwiseAdd(bit_width=BIT_WIDTH, return_quant_tensor=True)
                                            
 
     def forward(self, higher_res_feature, lower_res_feature):
