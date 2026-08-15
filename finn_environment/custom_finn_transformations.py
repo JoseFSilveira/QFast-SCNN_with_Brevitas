@@ -176,3 +176,77 @@ class MoveScalarLinearPastConcat(Transformation):
                     continue
         model = model.transform(InferShapes())
         return (model, graph_modified)
+
+
+class MakeConcatNHWC(Transformation):
+    """
+    Converts the inputs and outputs for all Concat Layers from NCHW to NHWC.
+    Only proceeds if the Concat all producers and consumers have op_type "Transpose".
+    """
+
+    def apply(self, model):
+        graph = model.graph
+        graph_modified = False
+        node_ind = 0
+        for n in graph.node:
+            node_ind += 1
+            if n.op_type == "Concat":
+                ishape = model.get_tensor_shape(n.input[0])
+                old_axis = get_by_name(n.attribute, "axis").i
+
+                # Verify if the Concat axis is not on the last dimension (C) for NCHW layout
+                if old_axis == -1 or old_axis == len(ishape) - 1:
+                    warnings.warn(
+                        "%s: Concat axis is on the last dimension (C) for NCHW layout. Can't operate transformation on node." % n.name
+                    )
+                    continue
+
+                consumer = model.find_consumer(n.output[0])
+                producers = [model.find_producer(inp) for inp in n.input]
+
+                # Verify if all producers and the consumer are not None and have op_type "Transpose"
+                if not all(producer is not None and producer.op_type == "Transpose" for producer in producers):
+                    warnings.warn(
+                        "%s: Not all producers are Transpose. Can't operate transformation on node." % n.name
+                    )
+                    continue
+                if consumer is None or consumer.op_type != "Transpose":
+                    warnings.warn(
+                        "%s: Consumer is not Transpose. Can't operate transformation on node." % n.name
+                    )
+                    continue
+
+                # Verify if all producers have (N, H, W, C) -> (N, C, H, W) transpose pattern
+                if not all(list(get_by_name(producer.attribute, "perm").ints) == [0, 3, 1, 2] for producer in producers):
+                    warnings.warn(
+                        "%s: Not all producers have (N, H, W, C) -> (N, C, H, W) transpose pattern. Can't operate transformation on node." % n.name
+                    )
+                    continue
+                # Verify if the consumer have (N, C, H, W) -> (N, H, W, C) transpose pattern
+                if not list(get_by_name(consumer.attribute, "perm").ints) == [0, 2, 3, 1]:
+                    warnings.warn(
+                        "%s: Consumer does not have (N, C, H, W) -> (N, H, W, C) transpose pattern. Can't operate transformation on node." % n.name
+                    )
+                    continue
+
+                # If all checks passed, we can proceed to convert the Concat node from NCHW to NHWC
+                for attr in n.attribute:
+                    if attr.name == "axis":
+                        attr.i = len(ishape) - 1  # Set the axis to the last dimension (C) for NHWC layout
+
+                # And then proceed to erase the Transpose nodes and rewire the graph accordingly
+                start_names = [producer.input[0] for producer in producers]
+                end_name = consumer.output[0]
+                n.output[0] = end_name
+                for i in range(len(producers)):
+                    n.input[i] = start_names[i]
+
+                graph.node.remove(consumer)
+                for producer in producers:
+                    graph.node.remove(producer)
+
+                # Break the loop after modifying the graph to avoid issues with iterating over a modified list of nodes
+                graph_modified = True
+                break
+
+        return (model, False)

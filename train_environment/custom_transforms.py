@@ -49,10 +49,26 @@ class Transforms:
             v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # Normaliza com media e desvio padrao do ImageNet
         ])
 
+        self.val_transform_square = v2.Compose([
+                            v2.PILToTensor(),
+                            v2.CenterCrop(IM_HEIGHT), # faz um crop centralizado de 1024x1024
+                            v2.ToDtype(torch.float32, scale=True),
+                            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # Normaliza com media e desvio padrao do ImageNet
+                        ])
+
         # -- TARGET TRANFROMS -- #
         self.target_transform = v2.Compose([
             #v2.Resize(size=conv_size, interpolation=InterpolationMode.NEAREST_EXACT), # redimensiona imagem para 256x512. Nearest Neighbor para nao criar novos valores
             v2.PILToTensor(), # converte segmentação PIL para tensor
+            IdToTrainIdTransform(lable_conversion), # converte ids originais para ids de treino
+            v2.Lambda(mask_squeeze), # remove canal extra desnecessário na segmentação
+            v2.ToDtype(torch.uint8) # apenas converte para inteiro sem normalizacao
+        ])
+
+        # -- TARGET 1:1 TRANFROMS -- #
+        self.target_transform_square = v2.Compose([
+            v2.PILToTensor(), # converte segmentação PIL para tensor
+            v2.CenterCrop(IM_HEIGHT), # faz um crop centralizado de 1024x1024
             IdToTrainIdTransform(lable_conversion), # converte ids originais para ids de treino
             v2.Lambda(mask_squeeze), # remove canal extra desnecessário na segmentação
             v2.ToDtype(torch.uint8) # apenas converte para inteiro sem normalizacao
