@@ -2,8 +2,44 @@ import torch
 from torchvision.datasets import Cityscapes
 from pathlib import Path
 import warnings
+import json
 
 from config import IGNORE_INDEX, NUM_CLASSES
+
+
+def read_json_dict(filename):
+    with open(filename, "r") as f:
+        ret = json.load(f)
+    return ret
+
+
+def pynqz2_viability_check(resource_dict: dict) -> None:
+    '''
+    Reads the resource dict and checks if the model can be deployed on the Pynq-Z2 board.
+    '''
+    # Pynx-Z2 board specs
+    pynqz2_limits = {
+        "LUT": 53200.0,
+        "BRAM_18K": 280.0, # Xilinx list 140 BRAM_36K, which is equivalent to 280 BRAM_18K
+        "DSP": 220.0,
+        "URAM": 0.0        # The Pynq-Z2 board does not have URAM, so the limit is 0
+    }
+
+    totals = resource_dict.get("total", {})
+    report_text = f"Pynq-Z2 uses ZYNQ XC7Z020-1CLG400C SoC\nResource usage totals: {totals}\n\n"
+
+    for resource, limit in pynqz2_limits.items():
+        usage = totals.get(resource, 0.0) # if no resource is found, assume 0 usage
+        usage_percentage = (usage / limit * 100) if limit > 0 else 0.0
+        if limit == 0 and usage > 0:
+            status_text = "IMPOSSIBLE (resource not available on Pynq-Z2)"
+        elif usage_percentage < 115: # Allowing a 15% margin for error since Vivado optimizes hte LUTs
+            status_text = "PASS"
+        else:
+            status_text = "FAIL"
+        report_text += f"Checking {resource}: {usage} used, {limit} limit. Usage percentage: {usage_percentage:.2f}%. {status_text}\n"
+    print(report_text)
+
 
 
 def generate_cityscapes_labels():
